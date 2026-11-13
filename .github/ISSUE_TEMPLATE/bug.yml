@@ -1,0 +1,34 @@
+name: Bug report
+description: Something isn't working on phone or watch.
+body:
+  - type: markdown
+    attributes:
+      value: 'Please remove passwords, cookies, keys, private hostnames and sensitive conversations before submitting.'
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: What you expected, what happened, and steps to reproduce.
+    validations:
+      required: true
+  - type: textarea
+    id: devices
+    attributes:
+      label: Devices and versions
+      description: Phone and Android version; watch and Wear OS version; client version; Murmur and Hermes versions.
+    validations:
+      required: true
+  - type: dropdown
+    id: connection
+    attributes:
+      label: Connection
+      options:
+        - Tailscale Serve HTTPS
+        - Tailscale IP or MagicDNS with HTTP
+        - Local network
+        - Other HTTPS
+  - type: textarea
+    id: details
+    attributes:
+      label: Redacted error or screenshot
+      description: Include whether the same URL works in Chrome and whether the watch is nearby.

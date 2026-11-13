@@ -1,0 +1,14 @@
+name: Feature request
+description: Suggest something useful for phone or watch.
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would this help you do?
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where?
+      options: [Android phone, Wear OS, Connection or installation, Documentation]

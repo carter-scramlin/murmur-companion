@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="560" viewBox="0 0 1200 560" role="img" aria-labelledby="title desc">
+  <title id="title">Murmur Companion</title><desc id="desc">Your agents, a little closer. Android and Wear OS clients for your own Murmur server. Interface illustration.</desc>
+  <rect width="1200" height="560" rx="28" fill="#FEFAED"/>
+  <g font-family="Inter,Arial,sans-serif" fill="#1D1626">
+    <text x="66" y="78" font-size="23" font-weight="700" letter-spacing="-1">murmur <tspan font-weight="400" fill="#807585">companion</tspan></text>
+    <text x="66" y="190" font-size="58" font-weight="700" letter-spacing="-2.5">Your agents.</text>
+    <text x="66" y="258" font-size="58" font-weight="700" letter-spacing="-2.5">A little closer.</text>
+    <text x="68" y="312" font-size="20" fill="#756B7C">At home in your pocket.</text>
+    <text x="68" y="344" font-size="20" fill="#756B7C">A quiet conversation on your wrist.</text>
+    <rect x="66" y="393" width="235" height="44" rx="22" fill="#EDE4FA"/>
+    <text x="90" y="421" font-size="14" font-weight="600" fill="#7751B3">ANDROID + WEAR OS</text>
+    <text x="68" y="497" font-size="13" fill="#817888">Independent. Open source. Made for your own Murmur.</text>
+  </g>
+  <rect x="719" y="60" width="226" height="440" rx="35" fill="#1D1626"/>
+  <rect x="727" y="68" width="210" height="424" rx="28" fill="#FFFDF7"/>
+  <rect x="797" y="77" width="69" height="17" rx="8.5" fill="#1D1626"/>
+  <g font-family="Inter,Arial,sans-serif">
+    <text x="747" y="133" font-size="17" font-weight="700" fill="#1D1626">murmur</text>
+    <text x="747" y="163" font-size="11" fill="#817888">A space for your agents</text>
+    <rect x="743" y="184" width="178" height="72" rx="16" fill="#F1EAFB"/>
+    <circle cx="767" cy="208" r="10" fill="#9D75F1"/><text x="787" y="212" font-size="12" fill="#1D1626">Atlas</text>
+    <text x="758" y="239" font-size="11" fill="#756B7C">Ready for your next thought.</text>
+    <rect x="743" y="267" width="178" height="72" rx="16" fill="#F7EEE8"/>
+    <circle cx="767" cy="291" r="10" fill="#FD8D8C"/><text x="787" y="295" font-size="12" fill="#1D1626">Juniper</text>
+    <text x="758" y="322" font-size="11" fill="#756B7C">A fresh perspective, always.</text>
+    <rect x="744" y="430" width="176" height="40" rx="20" fill="#F1EDE5"/><text x="761" y="455" font-size="11" fill="#817888">What’s on your mind?</text>
+  </g>
+  <rect x="993" y="134" width="87" height="286" rx="38" fill="#DBD1C5"/>
+  <circle cx="1036" cy="278" r="96" fill="#29232D"/>
+  <rect x="1129" y="263" width="9" height="27" rx="4" fill="#29232D"/>
+  <circle cx="1036" cy="278" r="86" fill="#09080B"/>
+  <g font-family="Inter,Arial,sans-serif" text-anchor="middle">
+    <text x="1036" y="239" font-size="16" font-weight="600" fill="#F4EDFF">Atlas</text>
+    <text x="1036" y="262" font-size="10" fill="#AAA0B5">Watch chat</text>
+    <rect x="973" y="278" width="126" height="39" rx="19.5" fill="#C4A5FF"/>
+    <text x="1036" y="302" font-size="12" font-weight="600" fill="#1D1626">Say something</text>
+    <text x="1036" y="339" font-size="10" fill="#B8ACCA">Close by. Connected.</text>
+  </g>
+  <text x="914" y="534" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#988B9C">Interface illustration · See docs for tested feature coverage</text>
+</svg>

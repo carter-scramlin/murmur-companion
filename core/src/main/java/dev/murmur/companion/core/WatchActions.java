@@ -81,7 +81,7 @@ public final class WatchActions {
                     if (name.trim().isEmpty()) name = profile.optString("display_name");
                     if (name.trim().isEmpty()) name = id.equals("default") ? "Hermes" : id;
                     agents.put(new JSONObject().put("profile", id).put("hermes", hermes).put("name", clip(name, 80))
-                            .put("home", clip(connection.optString("name", "Home"), 80)));
+                            .put("home", clip(connection.optString("name", "Home"), 80)).put("hue",AgentLook.hue(profile)));
                 }
             } catch (Exception ex) { warnings.put(connection.optString("name", "A Hermes") + " is unavailable. Open Murmur on your phone."); }
         }

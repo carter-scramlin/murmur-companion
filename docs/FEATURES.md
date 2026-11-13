@@ -1,6 +1,6 @@
 # Feature coverage
 
-Version 0.2.0 makes the everyday phone experience native Android. Agent lists, conversations, search, the message composer, streamed text replies, stop, rename, copy, dictation, one-time approvals and clarification forms are Android views. A WebView is not created for those screens.
+Version 0.3.0-beta.1 makes the everyday phone experience native Android. Agent lists, conversations, search, the message composer, streamed text replies, stop, rename, copy, dictation, one-time approvals and clarification forms are Android views. A WebView is not created for those screens.
 
 The explicit **Full Murmur workspace** screen retains the server's interface for advanced features and sign-in. Native chat is not yet a complete replacement for every desktop feature. Physical-device validation is still required.
 
@@ -27,6 +27,16 @@ The explicit **Full Murmur workspace** screen retains the server's interface for
 | Dark theme | Native phone screens currently light; workspace follows server theme | Native black interface |
 | Background Web Push | Not implemented; use a compatible browser/PWA | No proactive agent notifications |
 | Home widgets / watch tiles / complications | Not implemented | Not implemented |
+
+## Characters and activity (beta candidate 1)
+
+Murmur's MIT Buddy designs are adapted to native Canvas views, with profile hue metadata, deterministic proportions, expressions and gentle motion during active work. They appear in agent cards, conversation headers, assistant rows, empty states and activity cards. The watch shows a static character for its selected agent. No hosted image fetch or browser renderer is used for these characters.
+
+Thinking, Working, Replying, Needs you and Finished are also written as text. The persistent activity card shows elapsed time, human-readable tool activity and Stop. Cached chats process completion events even when you return to the list. The phone honours the reduced-motion preference, Android animator settings and battery saver. Watch motion stays disabled to limit power use.
+
+Native reconnects are read-only, with up to three attempts while foregrounded. Failed/uncertain sends are never resubmitted automatically. Slow chat loads can be left with Back, and late responses cannot take over a newer screen. Drafts persist after a short debounce as well as on navigation/backgrounding.
+
+See [BETA.md](BETA.md) for signing and hardware gates before broad distribution.
 
 ## Connection and sign-in
 

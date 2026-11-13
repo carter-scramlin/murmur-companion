@@ -57,7 +57,7 @@ public class NativePhoneTest {
         try(ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).setup().visible()){
             MainActivity activity=controller.get();await(()->activity.store.selected!=null&&!activity.store.loading);
             settle();View decor=activity.getWindow().getDecorView();render(decor,"phone-native-chats.png");assertEquals(0,countWebViews(decor));
-            View chat=findText(decor,"A little weekend away");assertNotNull(chat);((View)chat.getParent()).performClick();await(()->activity.store.chat!=null&&activity.store.chat.ready&&!activity.store.loading);settle();
+            View chat=findText(decor,"A little weekend away");assertNotNull(chat);clickRow(chat);await(()->activity.store.chat!=null&&activity.store.chat.ready&&!activity.store.loading);settle();
             EditText input=findEdit(activity.getWindow().getDecorView(),"Message your agent");assertNotNull(input);input.setText("Hello native");settle();View send=findDescription(activity.getWindow().getDecorView(),"Send message");assertNotNull(send);assertTrue(send.isEnabled());send.performClick();
             await(()->activity.store.chat!=null&&!activity.store.chat.busy&&activity.store.chat.rows.stream().anyMatch(r->r.text.equals("Native reply")));settle();assertEquals(1,prompts.get());assertEquals(0,countWebViews(activity.getWindow().getDecorView()));
             input.setText("Keep this thought for later");settle();render(activity.getWindow().getDecorView(),"phone-native-chat.png");
@@ -79,10 +79,27 @@ public class NativePhoneTest {
             findText(decor,"Allow once").performClick();AlertDialog alert=org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();assertTrue(alert.isShowing());assertEquals(1,chat.requests.size());alert.getButton(AlertDialog.BUTTON_NEGATIVE).performClick();assertEquals(1,chat.requests.size());
         }
     }
+    @Test public void workingCharacterHasExplicitStatusElapsedTimeAndStop()throws Exception{
+        Context context=RuntimeEnvironment.getApplication();context.getSharedPreferences("connection",0).edit().clear().putBoolean("reduce_motion",true).commit();
+        try(ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).setup().visible()){
+            MainActivity activity=controller.get();NativeStore store=activity.store;
+            store.selected=new NativeStore.Agent("home","garden","Juniper","At home",128);store.agents.add(store.selected);store.online=true;
+            NativeChat chat=new NativeChat("home","garden","working");chat.snapshot(new JSONObject().put("session_id","runtime").put("info",new JSONObject().put("title","A quiet weekend"))
+                .put("messages",new JSONArray().put(new JSONObject().put("role","user").put("text","Find us somewhere quiet for the weekend."))));
+            chat.event(new JSONObject().put("session_id","runtime").put("type","tool.start").put("payload",new JSONObject().put("name","web_search")));chat.workStartedAt=System.currentTimeMillis()-125000;
+            store.chat=chat;activity.showNative();settle();View decor=activity.getWindow().getDecorView();render(decor,"phone-native-working.png");
+            assertNotNull(findText(decor,"Juniper is working"));assertNotNull(findText(decor,"Looking things up"));assertNotNull(findText(decor,"Stop"));assertEquals(0,countWebViews(decor));
+            View character=findBuddy(decor);assertNotNull(character);assertEquals(128,((dev.murmur.companion.ui.BuddyView)character).hue(),.01);
+            chat.event(new JSONObject().put("session_id","runtime").put("type","message.complete").put("payload",new JSONObject().put("text","Here are three lovely places.")));store.observer.run();settle();
+            assertFalse(chat.busy);assertNotNull(findDescription(decor,"Send message"));
+        }finally{context.getSharedPreferences("connection",0).edit().clear().commit();}
+    }
+    private static View findBuddy(View view){if(view instanceof dev.murmur.companion.ui.BuddyView)return view;if(view instanceof ViewGroup g)for(int i=0;i<g.getChildCount();i++){View found=findBuddy(g.getChildAt(i));if(found!=null)return found;}return null;}
     interface Check{boolean ready();}
     private static void await(Check check)throws Exception{long end=System.currentTimeMillis()+12000;while(System.currentTimeMillis()<end){shadowOf(Looper.getMainLooper()).idle();if(check.ready())return;Thread.sleep(15);}fail("Native UI did not reach the expected state");}
     private static void settle(){shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(100));}
     private static void event(WebSocket ws,String type,int seq,JSONObject payload)throws Exception{ws.send(new JSONObject().put("method","event").put("params",new JSONObject().put("type",type).put("session_id","runtime").put("seq",seq).put("payload",payload)).toString());}
+    private static void clickRow(View view){while(view!=null){if(view.isClickable()){view.performClick();return;}view=view.getParent() instanceof View?(View)view.getParent():null;}fail("No clickable conversation row");}
     private static View findText(View view,String value){if(view instanceof TextView text&&value.contentEquals(text.getText()))return view;if(view instanceof ViewGroup group)for(int i=0;i<group.getChildCount();i++){View found=findText(group.getChildAt(i),value);if(found!=null)return found;}return null;}
     private static View findDescription(View view,String value){if(value.contentEquals(view.getContentDescription()==null?"":view.getContentDescription()))return view;if(view instanceof ViewGroup group)for(int i=0;i<group.getChildCount();i++){View found=findDescription(group.getChildAt(i),value);if(found!=null)return found;}return null;}
     private static EditText findEdit(View view,String description){View v=findDescription(view,description);return v instanceof EditText?(EditText)v:null;}

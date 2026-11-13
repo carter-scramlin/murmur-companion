@@ -1,4 +1,4 @@
-# Native Android architecture (0.2.0)
+# Native Android architecture (0.3.0 beta candidate)
 
 - `MainActivity`: native Chats, Agents and Settings screens, RecyclerView transcript, composer, Android dictation, draft persistence, approval confirmations and clarification forms. Native conversation screens do not instantiate a WebView.
 - `NativeStore`: Android ViewModel retains selected agent/chat, cached lists, ten recent transcripts, drafts and the transport across configuration changes. A serial executor owns network operations; the main thread owns UI state. Sockets close after 20 seconds in the background and resume read-only on return.
@@ -11,6 +11,12 @@ Native phone RPC methods: `profiles.list`, `session.list`, `session.create`, `se
 Phone draft keys include server origin, Hermes, profile and stored chat ID. Drafts persist only in app-private preferences; transcripts are memory-only and bounded to 500 rows per snapshot, ten cached chats. No offline prompt queue exists. Native chat supports basic Markdown, not the complete rich renderer.
 
 Tests include direct native HTTP/WebSocket fixture integration, exactly one submission from a Send tap, Activity recreation with draft retention, approval confirmation without implicit permission, stream deduplication/gap behavior, watch contracts and endpoint policy. Use JDK 17 and run the Gradle checks below.
+
+## Characters and activity
+
+`shared-ui/.../BuddyView.java` is included in both Android modules' main source sets. It adapts Murmur's MIT vector character geometry and deterministic traits to cached native Canvas paths/shaders. `core/AgentLook` reads Murmur hue metadata and bot colour fallbacks. It does not fetch avatar images or create a WebView. Active phone characters animate; static watch characters conserve power. Reduced motion, Android animator settings and battery saver stop phone movement.
+
+`NativeChat` exposes typed activity phases, current tool activity and work start time. Phone activity cards and character expressions use the same state. NativeStore routes events into cached transcripts, scopes socket callbacks to connection generations, rejects stale navigation completions and retries only read-only reconnects (up to three attempts). Queued work from an old server configuration is discarded. Neither retry nor reconnect replays a prompt.
 
 ## Build
 

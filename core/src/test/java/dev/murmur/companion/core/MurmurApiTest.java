@@ -21,7 +21,7 @@ public class MurmurApiTest {
         MockWebServer other = new MockWebServer(); other.start();
         try {
             server.enqueue(new MockResponse().setResponseCode(302).addHeader("Location", other.url("/steal")));
-            try { api.get("/murmur/session"); fail(); } catch (IOException expected) { assertTrue(expected.getMessage().contains("sign in")); }
+            try { api.get("/murmur/session"); fail(); } catch (IOException expected) { assertTrue(expected instanceof MurmurApi.AuthRequired); }
             assertEquals("murmur_session=private", server.takeRequest().getHeader("Cookie"));
             assertNull(other.takeRequest(200, TimeUnit.MILLISECONDS));
             try { api.get("//attacker.example"); fail(); } catch (IOException expected) { }
@@ -29,7 +29,7 @@ public class MurmurApiTest {
     }
     @Test public void refusesHtmlSignInPages() throws Exception {
         server.enqueue(new MockResponse().setBody("<html>Umbrel login</html>"));
-        try { api.get("/murmur/connections"); fail(); } catch (IOException expected) { assertTrue(expected.getMessage().contains("signing in")); }
+        try { api.get("/murmur/connections"); fail(); } catch (IOException expected) { assertTrue(expected instanceof MurmurApi.AuthRequired); }
     }
     @Test public void agentListKeepsHermesIdentityAndSkipsUnavailableHomes() throws Exception {
         server.enqueue(new MockResponse().setBody(new JSONObject().put("connections", new JSONArray()

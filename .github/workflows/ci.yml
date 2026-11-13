@@ -26,6 +26,8 @@ jobs:
         run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
       - name: Test, lint and build both apps with one debug key
         run: ./gradlew :core:test :phone:testDebugUnitTest :wear:testDebugUnitTest :phone:lintDebug :wear:lintDebug :phone:assembleDebug :wear:assembleDebug --console=plain
+      - name: Verify optimized builds with a disposable test key
+        run: ./scripts/verify-optimized.sh
       - name: Package the matching pair
         run: |
           mkdir -p artifacts

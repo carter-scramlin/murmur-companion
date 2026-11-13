@@ -1,0 +1,43 @@
+name: Beta feedback
+description: Report a problem with the Android or Wear OS beta candidate.
+title: '[Beta] '
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: 'Please keep chat content, server addresses, cookies and keys out of your report. Never attach a keystore. Settings → Send beta feedback can prepare a report with basic device information.'
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      placeholder: 0.3.0-beta.1
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Phone/watch model and Android/Wear OS version
+    validations:
+      required: true
+  - type: dropdown
+    id: connection
+    attributes:
+      label: Connection
+      options:
+        - Local Wi-Fi
+        - Tailscale over Wi-Fi
+        - Tailscale over cellular
+        - Wear OS paired phone relay
+        - Other / unsure
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: What happened and how to reproduce it
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true

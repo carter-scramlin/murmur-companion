@@ -14,10 +14,10 @@ The native API integration was checked against Murmur source revisions `27253d22
 
 ## 2. Download both apps
 
-Open [Releases → v0.2.0](https://github.com/carter-scramlin/murmur-companion/releases/tag/v0.2.0) and expand **Assets**. Download `murmur-companion-0.2.0-debug.zip` and extract it. It contains:
+Open [Releases → v0.3.0-beta.1](https://github.com/carter-scramlin/murmur-companion/releases/tag/v0.3.0-beta.1) and expand **Assets**. Download `murmur-companion-0.3.0-beta.1-candidate.zip` and extract it. It contains:
 
-- `murmur-companion-phone-debug.apk` — install on the phone.
-- `murmur-companion-wear-debug.apk` — install on the watch.
+- `murmur-companion-phone-candidate.apk` — install on the phone.
+- `murmur-companion-wear-candidate.apk` — install on the watch.
 - Full documentation and `SHA256SUMS`.
 
 You can also download the APKs individually from the same release. Keep the pair together because both apps must share the same signing certificate. **Skip the optional source build below** and continue with section 3.
@@ -45,19 +45,21 @@ On Windows, use `gradlew.bat` instead of `./gradlew`. The first build needs inte
 | Phone | `phone/build/outputs/apk/debug/phone-debug.apk` |
 | Watch | `wear/build/outputs/apk/debug/wear-debug.apk` |
 
+The public candidate uses optimized release APKs signed with a temporary preview key. The source-build outputs above are debug APKs for local development. If you are using a signed-beta workflow artifact, substitute `murmur-companion-phone.apk` and `murmur-companion-wear.apk` in the install commands.
+
 Both apps must have the same application ID (`dev.murmur.companion`) **and signing certificate**. Building them together on one computer uses the same Android debug key. Download both APKs from the same GitHub Release (or the same CI run if using Actions artifacts); debug keys from different machines/runs can differ.
 
-Debug builds are suitable for testing. For a stable personal installation across computers or CI runs, use a persistent release signing key as described in [releasing](RELEASING.md).
+The candidate is suitable for limited testing. Follow [BETA.md](BETA.md) for the tester pass and broad-beta signing/device gates. Debug builds are suitable for development testing. For a stable personal installation across computers or CI runs, use a persistent release signing key as described in [releasing](RELEASING.md).
 
 ## 3. Install on your phone
 
-**Using the file manager:** transfer `murmur-companion-phone-debug.apk` to the phone, tap it, and allow that file manager to install unknown apps when Android asks. Install the APK. You can turn that permission off afterward.
+**Using the file manager:** transfer `murmur-companion-phone-candidate.apk` to the phone, tap it, and allow that file manager to install unknown apps when Android asks. Install the APK. You can turn that permission off afterward.
 
 **Using ADB:** enable Developer options on the phone by tapping Build number seven times in Android Settings → About phone. Turn on USB debugging, connect the phone over USB and accept the computer's debugging prompt. In a terminal with Android Platform Tools on PATH:
 
 ```bash
 adb devices -l
-adb -s PHONE_SERIAL install -r murmur-companion-phone-debug.apk
+adb -s PHONE_SERIAL install -r murmur-companion-phone-candidate.apk
 ```
 
 Run commands from the folder containing your downloaded APKs. Replace `PHONE_SERIAL` with the serial shown by `adb devices -l`; do not type the placeholder literally. If you built from source, substitute the corresponding build output path from section 2.
@@ -68,7 +70,7 @@ Run commands from the folder containing your downloaded APKs. Replace `PHONE_SER
 2. Enter the root URL that opens Murmur, including `https://` and any port. Recommended: `https://umbrel.your-tailnet.ts.net` from Tailscale Serve.
 3. Tap **Connect to Murmur**. Native agent and conversation lists load directly from your server.
 4. If sign-in is required, tap the sign-in card (or **••• → Connection & sign-in → Sign in / Workspace**). Finish the normal Umbrel/Murmur sign-in, then tap **Native app** at the top to return.
-5. Use **Agents** to choose an agent, then open a conversation or tap **+** for a new one. Type or dictate a draft, review it, and tap the send arrow. Tap stop to interrupt a running reply.
+5. Use **Agents** to choose an agent, then open a conversation or tap **+** for a new one. Type or dictate a draft, review it, and tap the send arrow. The native Buddy character and activity card show Thinking / Working / Replying / Needs you, the current operation and elapsed time. Tap Stop to interrupt a running reply. Reduce motion in Settings if you prefer.
 6. Native approval cards show the proposed action; tap the card for details. **Allow once** asks you to confirm the action. Clarification cards open a native form.
 7. **Settings → Full Murmur workspace** keeps groups, models, memory, routines, integrations and rich content available. Sign-in and those advanced features use the explicit web screen.
 8. Use **••• → Connection & sign-in → Reconnect** after a VPN interruption. Reconnect never resends a message. If a send was unconfirmed, inspect the chat before sending again.
@@ -97,7 +99,7 @@ Menu wording varies by Wear OS version. Use the watch's Settings search if an it
    ```bash
    adb connect WATCH_IP:CONNECTION_PORT
    adb devices -l
-   adb -s WATCH_IP:CONNECTION_PORT install -r murmur-companion-wear-debug.apk
+   adb -s WATCH_IP:CONNECTION_PORT install -r murmur-companion-wear-candidate.apk
    ```
 
 6. Open **Murmur Companion** in the watch's app launcher. Keep the phone unlocked with Murmur signed in during the first check. Agents should load from your configured Hermes connections.

@@ -1,17 +1,18 @@
-name: Build and publish preview release
+name: Build and publish beta candidate
 on:
   push:
     branches: [main]
     paths:
       - .github/workflows/release.yml
-      - scripts/prepare-preview-release.py
+      - scripts/prepare-candidate.py
+      - scripts/package-candidate.sh
       - scripts/prepare-website.py
-      - docs/releases/0.2.0.md
+      - docs/releases/0.3.0-beta.1.md
   workflow_dispatch:
 permissions:
   contents: write
 concurrency:
-  group: release-v0.2.0
+  group: release-v0.3.0-beta.1
   cancel-in-progress: true
 jobs:
   release:
@@ -20,7 +21,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      RELEASE_TAG: v0.2.0
+      RELEASE_TAG: v0.3.0-beta.1
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Keep a published version unchanged
@@ -52,14 +53,14 @@ jobs:
         run: ./gradlew :core:test :phone:testDebugUnitTest :wear:testDebugUnitTest :phone:lintDebug :wear:lintDebug :phone:assembleDebug :wear:assembleDebug --console=plain
       - name: Verify signatures and package downloads
         if: steps.existing.outputs.published != 'true'
-        run: python3 scripts/prepare-preview-release.py
+        run: ./scripts/package-candidate.sh
       - name: Upload all assets before publishing
         if: steps.existing.outputs.published != 'true'
         run: |
-          gh release create "$RELEASE_TAG" artifacts/preview-release-0.2.0/* \
+          gh release create "$RELEASE_TAG" artifacts/candidate-0.3.0-beta.1/* \
             --target "$GITHUB_SHA" --draft --prerelease \
-            --title 'Murmur Companion 0.2.0 preview' \
-            --notes-file docs/releases/0.2.0.md
+            --title 'Murmur Companion 0.3.0 beta candidate 1' \
+            --notes-file docs/releases/0.3.0-beta.1.md
           gh release edit "$RELEASE_TAG" --draft=false
       - name: Release link
         run: |

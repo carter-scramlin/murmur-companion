@@ -17,6 +17,7 @@ import android.widget.*;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.*;
 import dev.murmur.companion.core.*;
+import dev.murmur.companion.ui.BuddyView;
 import org.json.*;
 import java.util.*;
 import static dev.murmur.companion.NativeViews.*;
@@ -24,7 +25,12 @@ import static dev.murmur.companion.NativeViews.*;
 /** Native Android launcher, conversations and streaming transcript. */
 public class MainActivity extends androidx.activity.ComponentActivity {
     NativeStore store;
-    private LinearLayout root, body, toolbar, composer, requestBox;
+    private LinearLayout root, body, toolbar, composer, requestBox,activityCard;
+    private BuddyView headerBuddy,activityBuddy;
+    private TextView activityTitle,activityDetail,activityElapsed;
+    private Button stopWork;
+    private final Runnable tick=new Runnable(){public void run(){if(foreground&&!isFinishing()&&!isDestroyed()&&surface.equals("native")&&store!=null&&store.chat!=null&&store.chat.busy){scheduleRender();main.postDelayed(this,1000);}}};
+    private final Runnable saveDraft=()->rememberDraft();
     private TextView title, subtitle, banner, empty, sendHint;
     private EditText input;
     private NativeChat composerChat;
@@ -34,7 +40,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
     private Endpoint endpoint;
     private String screen="", query="", surface="connection";
     private final Handler main=new Handler(Looper.getMainLooper());
-    private boolean updatePending;
+    private boolean updatePending,foreground;
     private android.content.SharedPreferences prefs(){return getSharedPreferences("connection",MODE_PRIVATE);}
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
@@ -84,7 +90,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
         page.addView(text(this,"Independent companion for Murmur by Umbrel",12,MUTED,false));
     }
     void showNative(){surface="native";screen="";render();}
-    private void scheduleRender(){if(!surface.equals("native")||updatePending)return;updatePending=true;main.postDelayed(()->{updatePending=false;if(!isDestroyed()&&!isFinishing())render();},40);}
+    private void scheduleRender(){if(!foreground||!surface.equals("native")||updatePending)return;updatePending=true;main.postDelayed(()->{updatePending=false;if(foreground&&!isDestroyed()&&!isFinishing())render();},40);}
     private String key(){return store.chat!=null?"chat:"+store.chat.hermes+":"+store.chat.profile+":"+store.chat.storedId:store.tab+":"+(store.selected==null?"":store.selected.key());}
     private void render(){
         if(!surface.equals("native"))return;
@@ -97,34 +103,37 @@ public class MainActivity extends androidx.activity.ComponentActivity {
             send.setContentDescription(chat.busy?"Stop response":"Send message");
             sendHint.setText(store.loading?"Syncing conversation…":!chat.requests.isEmpty()?"Your agent needs your answer":!store.online?"Reconnect to send · Your draft stays here":chat.busy?"Your agent is working · Tap stop to interrupt":"Your messages go directly to your Murmur");
             updateRequests(chat);
-            List<Item> items=new ArrayList<>();for(NativeChat.Row row:chat.rows)items.add(new Item(row.id,row.role,row.text,row.streaming?"streaming":""));
+            updateActivity(chat);
+            List<Item> items=new ArrayList<>();for(NativeChat.Row row:chat.rows)items.add(new Item(row.id,row.role,row.text,row.streaming?"streaming":"",store.selected==null?"":Float.toString(store.selected.hue)));
+            if(chat.busy&&chat.requests.isEmpty())items.add(new Item("live-work","activity",(store.selected==null?"Your agent":store.selected.name)+" is "+(chat.phase()==NativeChat.Phase.THINKING?"thinking":chat.phase()==NativeChat.Phase.REPLYING?"replying":"working"),chat.activityLabel()));
             if(items.isEmpty())items.add(new Item("welcome","welcome",store.selected==null?"Say hello.":"A little space for you and "+store.selected.name+".","Start a conversation. Your messages stay on your server."));
             boolean bottom=!list.canScrollVertically(1);adapter.submit(items,()->{if(bottom&&!items.isEmpty())list.scrollToPosition(items.size()-1);});
         }else if(!store.tab.equals("settings")){
             title.setText(store.tab.equals("agents")?"Your agents":"Conversations");subtitle.setText(store.tab.equals("agents")?"A familiar face, whenever you need one":store.selected==null?store.connection:store.selected.name+" · "+store.selected.home);
             List<Item> items=new ArrayList<>();
             if(store.tab.equals("agents")){
-                for(NativeStore.Agent a:store.agents)if((a.name+" "+a.home).toLowerCase(Locale.ROOT).contains(query.toLowerCase(Locale.ROOT)))items.add(new Item("agent:"+a.key(),"agent",a.name,a.home));
+                for(NativeStore.Agent a:store.agents)if((a.name+" "+a.home).toLowerCase(Locale.ROOT).contains(query.toLowerCase(Locale.ROOT)))items.add(new Item("agent:"+a.key(),"agent",a.name,a.home,a.hue+":"+store.agentPhase(a).name()));
             }else if(store.selected!=null){
-                JSONArray sessions=store.lists.get(store.selected.key());if(sessions!=null)for(int i=0;i<sessions.length();i++){JSONObject s=sessions.optJSONObject(i);if(s==null)continue;String t=s.optString("title","Untitled conversation"),preview=s.optString("preview",s.optInt("message_count")+" messages");if((t+" "+preview).toLowerCase(Locale.ROOT).contains(query.toLowerCase(Locale.ROOT)))items.add(new Item(s.optString("id"),"chat",t.isBlank()?"Untitled conversation":t,preview));}
+                JSONArray sessions=store.lists.get(store.selected.key());if(sessions!=null)for(int i=0;i<sessions.length();i++){JSONObject s=sessions.optJSONObject(i);if(s==null)continue;String t=s.optString("title","Untitled conversation"),preview=s.optString("preview",s.optInt("message_count")+" messages");if((t+" "+preview).toLowerCase(Locale.ROOT).contains(query.toLowerCase(Locale.ROOT)))items.add(new Item(s.optString("id"),"chat",t.isBlank()?"Untitled conversation":t,preview,store.selected.hue+":"+store.listState(store.selected,s.optString("id"))));}
             }
             if(items.isEmpty())items.add(new Item("empty","empty",store.loading?"Finding your conversations…":query.isBlank()?(store.tab.equals("agents")?"Your agents will be here.":"Make room for a new thought."):"No matches",store.loading?"Connecting privately to your Murmur.":store.agents.isEmpty()?"Sign in to your server or open the workspace to set up your first agent.":"Choose an agent and start a new conversation."));
             adapter.submit(items,null);
         }
         banner.setText(store.error.isBlank()?store.loading?"Connecting…":store.online?"":"Offline · Tap Reconnect":store.error);
-        banner.setVisibility(banner.getText().length()==0?View.GONE:View.VISIBLE);
+        banner.setVisibility(banner.getText().length()==0?View.GONE:View.VISIBLE);banner.setTextColor(store.error.isBlank()?MUTED:RED);banner.setBackgroundColor(store.error.isBlank()?SOFT:0xfff7e9e8);
     }
     private void buildScreen(){
-        rememberDraft();base();input=null;composerChat=null;send=null;adapter=null;
+        rememberDraft();main.removeCallbacks(tick);base();input=null;composerChat=null;send=null;adapter=null;headerBuddy=null;activityCard=null;
         toolbar=row(this);pad(toolbar,12,8,8);root.addView(toolbar,new LinearLayout.LayoutParams(-1,d(80)));
         boolean chat=store.chat!=null;
-        if(chat)toolbar.addView(icon(this,"back","Back to conversations",()->{rememberDraft();store.back();}));
+        if(chat){toolbar.addView(icon(this,"back","Back to conversations",()->{rememberDraft();store.back();}));headerBuddy=buddy(store.selected,BuddyView.Mood.IDLE,44);LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(d(44),d(44));bp.rightMargin=d(8);toolbar.addView(headerBuddy,bp);}
         else {ImageView logo=new ImageView(this);logo.setImageResource(R.drawable.murmur_icon);logo.setContentDescription("Murmur Companion");LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(d(42),d(42));lp.setMargins(d(4),0,d(12),0);toolbar.addView(logo,lp);}
         LinearLayout heading=column(this);title=text(this,"",chat?19:25,INK,true);title.setMaxLines(1);title.setEllipsize(TextUtils.TruncateAt.END);subtitle=text(this,"",11,MUTED,false);subtitle.setMaxLines(1);subtitle.setEllipsize(TextUtils.TruncateAt.END);heading.addView(title);heading.addView(subtitle);toolbar.addView(heading,new LinearLayout.LayoutParams(0,-2,1));
         if(!chat&&!store.tab.equals("settings"))toolbar.addView(icon(this,"plus","New conversation",this::chooseNewChat));
         toolbar.addView(icon(this,"more","Conversation and connection options",this::menu));
         banner=text(this,"",13,RED,false);pad(banner,20,10,10);banner.setBackgroundColor(0xfff7e9e8);banner.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);banner.setOnClickListener(v->connectionActions());root.addView(banner,new LinearLayout.LayoutParams(-1,-2));
         body=column(this);root.addView(body,new LinearLayout.LayoutParams(-1,0,1));
+        if(chat)buildActivityCard();
         if(store.tab.equals("settings")&&!chat){buildSettings();}
         else{
             if(!chat)buildSearch();
@@ -132,6 +141,29 @@ public class MainActivity extends androidx.activity.ComponentActivity {
             if(chat)buildComposer();
         }
         if(!chat)buildNavigation();
+    }
+    private BuddyView buddy(NativeStore.Agent agent,BuddyView.Mood state,int size){
+        BuddyView view=new BuddyView(this);view.character(agent==null?"buddy":agent.profile,agent==null?278:agent.hue);view.mood(state);view.motionAllowed(!prefs().getBoolean("reduce_motion",false));view.setLayoutParams(new LinearLayout.LayoutParams(d(size),d(size)));return view;
+    }
+    private BuddyView.Mood mood(NativeChat.Phase phase){return switch(phase){case THINKING->BuddyView.Mood.THINKING;case WORKING->BuddyView.Mood.WORKING;case REPLYING->BuddyView.Mood.REPLYING;case WAITING->BuddyView.Mood.WAITING;case DONE->BuddyView.Mood.DONE;case ERROR->BuddyView.Mood.ERROR;default->BuddyView.Mood.IDLE;};}
+    private void buildActivityCard(){
+        activityCard=row(this);pad(activityCard,12,10,10);activityCard.setBackground(shape(this,SOFT,22));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.setMargins(d(16),d(4),d(16),d(10));body.addView(activityCard,p);
+        activityBuddy=buddy(store.selected,BuddyView.Mood.IDLE,60);activityCard.addView(activityBuddy);
+        LinearLayout copy=column(this);pad(copy,8,0,0);activityTitle=text(this,"",16,INK,true);activityTitle.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);activityDetail=text(this,"",12,MUTED,false);activityDetail.setMaxLines(2);activityDetail.setEllipsize(TextUtils.TruncateAt.END);activityElapsed=text(this,"",10,MUTED,false);activityElapsed.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);copy.addView(activityTitle);copy.addView(activityDetail);copy.addView(activityElapsed);activityCard.addView(copy,new LinearLayout.LayoutParams(0,-2,1));stopWork=button(this,"Stop",false,()->store.stop());stopWork.setMinWidth(0);activityCard.addView(stopWork,new LinearLayout.LayoutParams(d(62),d(48)));
+    }
+    private void updateActivity(NativeChat chat){
+        BuddyView.Mood state=store.loading?BuddyView.Mood.THINKING:store.online?mood(chat.phase()):BuddyView.Mood.OFFLINE;
+        if(headerBuddy!=null){headerBuddy.character(store.selected==null?"buddy":store.selected.profile,store.selected==null?278:store.selected.hue);headerBuddy.mood(state);headerBuddy.setContentDescription((store.selected==null?"Agent":store.selected.name)+" · "+(store.online?chat.stateLabel():"Offline"));}
+        if(activityCard==null)return;boolean visible=store.loading||chat.busy||!chat.requests.isEmpty()||!store.online;
+        activityCard.setVisibility(visible?View.VISIBLE:View.GONE);activityBuddy.character(store.selected==null?"buddy":store.selected.profile,store.selected==null?278:store.selected.hue);activityBuddy.mood(state);
+        String name=store.selected==null?"Your agent":store.selected.name;
+        String label=store.loading?"Syncing your conversation":!store.online?"Connection interrupted":chat.status.equals("Stopping…")?"Stopping…":chat.phase()==NativeChat.Phase.WAITING?name+" needs you":name+" is "+chat.stateLabel().toLowerCase(Locale.ROOT);
+        if(!label.contentEquals(activityTitle.getText()))activityTitle.setText(label);
+        activityDetail.setText(store.loading?"Reading the latest messages from your server":store.online?chat.activityLabel():"Your draft is safe. No messages will be resent.");
+        long elapsed=chat.workStartedAt==0?0:Math.max(0,(System.currentTimeMillis()-chat.workStartedAt)/1000);
+        activityElapsed.setText(!store.online?"Tap the connection banner to retry":chat.phase()==NativeChat.Phase.WAITING?"Waiting for your permission or answer":elapsed<60?elapsed+"s elapsed":(elapsed/60)+"m "+(elapsed%60)+"s elapsed");
+        stopWork.setVisibility(!store.loading&&store.online&&chat.busy&&chat.requests.isEmpty()?View.VISIBLE:View.GONE);stopWork.setEnabled(!chat.status.equals("Stopping…"));
+        main.removeCallbacks(tick);if(foreground&&chat.busy)main.postDelayed(tick,1000);
     }
     private void buildSearch(){
         LinearLayout search=row(this);search.setBackground(shape(this,0xfff0ecef,18));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,d(48));lp.setMargins(d(20),d(4),d(20),d(16));body.addView(search,lp);
@@ -157,7 +189,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
         input=new EditText(this);input.setTextSize(16);input.setTextColor(INK);input.setHintTextColor(MUTED);input.setHint("Message your agent…");input.setContentDescription("Message your agent");input.setBackgroundColor(Color.TRANSPARENT);input.setMinLines(1);input.setMaxLines(5);input.setPadding(d(4),d(12),d(4),d(12));input.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);input.setImeOptions(EditorInfo.IME_FLAG_NO_EXTRACT_UI);input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(32000)});
         String draft=store.drafts.getOrDefault(store.chat.key(),getSharedPreferences("drafts",0).getString(draftKey(store.chat),""));input.setText(draft);input.setSelection(input.length());composer.addView(input,new LinearLayout.LayoutParams(0,-2,1));
         replaceSend("send");
-        input.addTextChangedListener(watcher(value->{if(composerChat!=null)store.drafts.put(composerChat.key(),value);scheduleRender();}));
+        input.addTextChangedListener(watcher(value->{if(composerChat!=null)store.drafts.put(composerChat.key(),value);main.removeCallbacks(saveDraft);main.postDelayed(saveDraft,500);scheduleRender();}));
         sendHint=text(this,"",10,MUTED,false);sendHint.setGravity(Gravity.CENTER);sendHint.setPadding(0,d(7),0,0);container.addView(sendHint);
     }
     private void replaceSend(String name){
@@ -207,7 +239,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
     private void rename(){NativeChat chat=store.chat;if(chat==null)return;EditText field=new EditText(this);field.setText(chat.title);field.setSingleLine();new AlertDialog.Builder(this).setTitle("Rename conversation").setView(field).setPositiveButton("Save",(dialog,w)->store.rename(field.getText().toString().trim())).setNegativeButton("Cancel",null).show();}
     private void connectionActions(){new AlertDialog.Builder(this).setTitle("Your connection").setMessage(store.error.isBlank()?store.connection:store.error).setPositiveButton("Reconnect",(dialog,w)->store.reconnect()).setNeutralButton("Sign in / Workspace",(dialog,w)->workspace()).setNegativeButton("Tailscale",(dialog,w)->tailscale()).show();}
     private void buildSettings(){
-        title.setText("Make yourself at home.");subtitle.setText("Murmur Companion · 0.2.0 native preview");ScrollView scroll=new ScrollView(this);body.addView(scroll);LinearLayout page=column(this);pad(page,20,14,24);scroll.addView(page);
+        title.setText("Make yourself at home.");subtitle.setText("Murmur Companion · "+BuildConfig.VERSION_NAME);ScrollView scroll=new ScrollView(this);body.addView(scroll);LinearLayout page=column(this);pad(page,20,14,24);scroll.addView(page);
         page.addView(text(this,"YOUR CONNECTION",11,PURPLE,true));space(page,12);
         setting(page,"Murmur server",prefs().getString("origin","Your private server"),this::connectionActions);
         setting(page,"Tailscale","Use your phone's private connection",this::tailscale);
@@ -215,11 +247,17 @@ public class MainActivity extends androidx.activity.ComponentActivity {
         page.addView(text(this,"YOUR WORKSPACE",11,PURPLE,true));space(page,12);
         setting(page,"Full Murmur workspace","Groups, models, memories, routines, files and integrations",this::workspace);
         setting(page,"Native conversations","Android lists, live replies, dictation, approval cards and saved drafts",()->new AlertDialog.Builder(this).setTitle("Native, where you talk").setMessage("Conversations are Android views, with a live connection directly to your server. The last conversations stay in memory while you navigate. Drafts stay in app-private storage. The full workspace and sign-in use the optional web screen.\n\nThis preview does not yet render all rich tool content or support file attachments in native chat. Use Workspace for those features.").setPositiveButton("Done",null).show());space(page,24);
+        Switch motion=new Switch(this);motion.setText("Reduce character motion");motion.setTextColor(INK);motion.setTextSize(14);motion.setMinHeight(d(56));motion.setChecked(prefs().getBoolean("reduce_motion",false));motion.setOnCheckedChangeListener((button,checked)->prefs().edit().putBoolean("reduce_motion",checked).apply());page.addView(motion);
+        setting(page,"Send beta feedback","Share device details without chats or server credentials",this::feedback);
         setting(page,"Change server","Connect to another Murmur",this::showConnection);
         setting(page,"Forget this device","Remove saved connection, sign-in and drafts",this::forget);
         space(page,24);page.addView(text(this,"Independent, open source. Made for Murmur by Umbrel.\nNo added analytics or hosted chat relay.",12,MUTED,false));
     }
     private void setting(LinearLayout parent,String name,String detail,Runnable click){LinearLayout row=row(this);pad(row,16,16,16);row.setBackground(ripple(this,CARD,20));LinearLayout copy=column(this);copy.addView(text(this,name,16,INK,true));space(copy,4);copy.addView(text(this,detail,12,MUTED,false));row.addView(copy,new LinearLayout.LayoutParams(0,-2,1));row.addView(new Glyph(this,"chevron"),new LinearLayout.LayoutParams(d(24),d(32)));row.setOnClickListener(v->click.run());row.setFocusable(true);LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=d(8);parent.addView(row,p);}
+    private void feedback(){
+        String details="Murmur Companion "+BuildConfig.VERSION_NAME+"\nAndroid "+Build.VERSION.RELEASE+" (API "+Build.VERSION.SDK_INT+")\nDevice: "+Build.MANUFACTURER+" "+Build.MODEL+"\n\nWhat happened:\n\nWhat I expected:\n\nConnection: Wi-Fi / cellular / Tailscale (choose one)\n\nPlease remove private details before posting. Do not include cookies, server addresses or chat content.";
+        Intent share=new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_SUBJECT,"Murmur Companion beta feedback").putExtra(Intent.EXTRA_TEXT,details);startActivity(Intent.createChooser(share,"Share beta feedback"));
+    }
     private void watchSettings(){if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},23);boolean enabled=prefs().getBoolean("watch",true);new AlertDialog.Builder(this).setTitle("Your Pixel Watch").setMessage("Install both APKs from the same release and sign in on your phone. The watch uses your phone's connection and has a separate Watch chat per agent.\n\nAccess is "+(enabled?"on.":"off.")).setPositiveButton(enabled?"Turn access off":"Turn access on",(dialog,w)->prefs().edit().putBoolean("watch",!enabled).apply()).setNegativeButton("Done",null).show();}
     private void workspace(){rememberDraft();startActivity(new Intent(this,WorkspaceActivity.class));}
     private void tailscale(){Intent intent=getPackageManager().getLaunchIntentForPackage("com.tailscale.ipn");if(intent==null)intent=new Intent(Intent.ACTION_VIEW,android.net.Uri.parse("https://play.google.com/store/apps/details?id=com.tailscale.ipn"));try{startActivity(intent);}catch(ActivityNotFoundException ex){toast("Install Tailscale on your phone first.");}}
@@ -232,40 +270,47 @@ public class MainActivity extends androidx.activity.ComponentActivity {
     private String draftKey(NativeChat c){return prefs().getString("origin","")+":"+c.hermes+":"+c.profile+":"+c.storedId;}
     private void rememberDraft(){if(input==null||store==null)return;NativeChat c=composerChat;if(c==null)return;String value=input.getText().toString();store.drafts.put(c.key(),value);getSharedPreferences("drafts",0).edit().putString(draftKey(c),value).apply();}
     private TextWatcher watcher(java.util.function.Consumer<String> change){return new TextWatcher(){public void beforeTextChanged(CharSequence s,int start,int count,int after){}public void onTextChanged(CharSequence s,int start,int before,int count){change.accept(s.toString());}public void afterTextChanged(Editable e){}};}
-    @Override protected void onStart(){super.onStart();if(store!=null)store.foreground(true);}
-    @Override protected void onResume(){super.onResume();if(surface.equals("native")){try{endpoint=new Endpoint(prefs().getString("origin",""),prefs().getBoolean("http",false));configure();}catch(IllegalArgumentException ex){endpoint=null;store.reset();showConnection();}}}
-    @Override protected void onStop(){rememberDraft();if(store!=null&&!isChangingConfigurations())store.foreground(false);super.onStop();}
+    @Override protected void onStart(){super.onStart();foreground=true;scheduleRender();if(store!=null)store.foreground(true);}
+    @Override protected void onResume(){super.onResume();if(store!=null&&store.chat!=null&&store.chat.busy)main.postDelayed(tick,1000);if(surface.equals("native")){try{endpoint=new Endpoint(prefs().getString("origin",""),prefs().getBoolean("http",false));configure();}catch(IllegalArgumentException ex){endpoint=null;store.reset();showConnection();}}}
+    @Override protected void onStop(){foreground=false;main.removeCallbacks(tick);main.removeCallbacks(saveDraft);rememberDraft();if(store!=null&&!isChangingConfigurations())store.foreground(false);super.onStop();}
     @Override protected void onSaveInstanceState(Bundle out){rememberDraft();out.putString("query",query);super.onSaveInstanceState(out);}
     @Override protected void onDestroy(){if(store!=null)store.observer=null;main.removeCallbacksAndMessages(null);super.onDestroy();}
-    private record Item(String id,String role,String text,String detail){}
+    private record Item(String id,String role,String text,String detail,String look){Item(String id,String role,String text,String detail){this(id,role,text,detail,"");}}
     private class NativeAdapter extends RecyclerView.Adapter<Holder>{
         List<Item> items=new ArrayList<>();
         NativeAdapter(){setHasStableIds(false);}
         void submit(List<Item> next,Runnable done){List<Item> before=items;DiffUtil.DiffResult diff=DiffUtil.calculateDiff(new DiffUtil.Callback(){public int getOldListSize(){return before.size();}public int getNewListSize(){return next.size();}public boolean areItemsTheSame(int o,int n){return before.get(o).id.equals(next.get(n).id);}public boolean areContentsTheSame(int o,int n){return before.get(o).equals(next.get(n));}});items=next;diff.dispatchUpdatesTo(this);if(done!=null)done.run();}
-        @Override public int getItemViewType(int pos){return switch(items.get(pos).role){case "user"->1;case "assistant","notice"->2;case "agent","chat"->3;default->4;};}
+        @Override public int getItemViewType(int pos){return switch(items.get(pos).role){case "activity"->5;case "user"->1;case "assistant","notice"->2;case "agent","chat"->3;default->4;};}
         @Override public Holder onCreateViewHolder(ViewGroup parent,int type){
             LinearLayout outer=column(MainActivity.this);outer.setLayoutParams(new RecyclerView.LayoutParams(-1,-2));pad(outer,4,6,6);
             LinearLayout card=column(MainActivity.this);pad(card,16,type==3?18:14,type==3?18:14);outer.addView(card,new LinearLayout.LayoutParams(-1,-2));
             TextView label=text(MainActivity.this,"",10,MUTED,true),primary=text(MainActivity.this,"",type==3?17:16,INK,type==3),secondary=text(MainActivity.this,"",12,MUTED,false);
-            card.addView(label);card.addView(primary,new LinearLayout.LayoutParams(-1,-2));card.addView(secondary);return new Holder(outer,card,label,primary,secondary,type);
+            LinearLayout line=row(MainActivity.this);if(type==2)line.setGravity(Gravity.TOP);BuddyView face=buddy(null,BuddyView.Mood.IDLE,type==3?56:type==5?32:26);LinearLayout.LayoutParams faceParams=new LinearLayout.LayoutParams(d(type==3?56:type==5?32:26),d(type==3?56:type==5?32:26));faceParams.rightMargin=d(type==2?7:12);line.addView(face,faceParams);
+            LinearLayout copy=column(MainActivity.this);copy.addView(label);copy.addView(primary,new LinearLayout.LayoutParams(-1,-2));copy.addView(secondary);TextView badge=text(MainActivity.this,"",11,PURPLE,true);badge.setPadding(0,d(6),0,0);copy.addView(badge);line.addView(copy,new LinearLayout.LayoutParams(0,-2,1));card.addView(line);return new Holder(outer,card,label,primary,secondary,badge,face,type);
         }
-        @Override public void onBindViewHolder(Holder h,int position){Item item=items.get(position);h.label.setVisibility(View.GONE);h.secondary.setVisibility(View.GONE);h.primary.setTypeface(Typeface.create(h.type==3?"sans-serif-medium":"sans-serif",Typeface.NORMAL));
+        @Override public void onBindViewHolder(Holder h,int position){Item item=items.get(position);h.label.setVisibility(View.GONE);h.secondary.setVisibility(View.GONE);h.badge.setVisibility(View.GONE);h.face.setVisibility(View.GONE);h.primary.setTypeface(Typeface.create(h.type==3?"sans-serif-medium":"sans-serif",Typeface.NORMAL));
             LinearLayout.LayoutParams lp=(LinearLayout.LayoutParams)h.card.getLayoutParams();lp.leftMargin=h.type==1?d(38):0;lp.rightMargin=h.type==1?0:h.type==2?d(12):0;h.card.setLayoutParams(lp);
+            NativeStore.Agent character=store.selected;if(item.role.equals("agent"))for(NativeStore.Agent agent:store.agents)if(item.id.equals("agent:"+agent.key())){character=agent;break;}
+            h.face.character(character==null?"buddy":character.profile,character==null?278:character.hue);h.face.motionAllowed(!prefs().getBoolean("reduce_motion",false));h.face.mood(BuddyView.Mood.IDLE);
             if(h.type==1||h.type==2){
                 h.card.setBackground(shape(MainActivity.this,h.type==1?SOFT:Color.TRANSPARENT,22));h.label.setVisibility(View.VISIBLE);h.label.setText(item.role.equals("user")?"YOU":item.role.equals("notice")?"CONNECTION NOTE":store.selected==null?"YOUR AGENT":store.selected.name.toUpperCase(Locale.ROOT));h.label.setTextColor(item.role.equals("notice")?RED:MUTED);h.label.setPadding(0,0,0,d(7));
-                h.primary.setText(item.role.equals("assistant")?markdown(item.text):item.text);h.primary.setTextIsSelectable(true);h.primary.setLinksClickable(true);h.primary.setMovementMethod(LinkMovementMethod.getInstance());h.primary.setLineSpacing(d(5),1);h.primary.setOnLongClickListener(v->{copy(item.text);return true;});
+                h.face.setVisibility(item.role.equals("assistant")?View.VISIBLE:View.GONE);h.face.mood(item.detail.equals("streaming")?BuddyView.Mood.REPLYING:BuddyView.Mood.IDLE);h.primary.setText(item.role.equals("assistant")?markdown(item.text):item.text);h.primary.setTextIsSelectable(true);h.primary.setLinksClickable(true);h.primary.setMovementMethod(LinkMovementMethod.getInstance());h.primary.setLineSpacing(d(5),1);h.primary.setOnLongClickListener(v->{copy(item.text);return true;});
                 h.card.setOnClickListener(null);if(item.detail.equals("streaming")){h.secondary.setText("●  Replying");h.secondary.setTextColor(PURPLE);h.secondary.setVisibility(View.VISIBLE);}
             }else if(h.type==3){
                 h.primary.setTextIsSelectable(false);h.primary.setMaxLines(1);h.primary.setEllipsize(TextUtils.TruncateAt.END);h.primary.setText(item.text);h.secondary.setText(item.detail);h.secondary.setTextColor(MUTED);h.secondary.setMaxLines(2);h.secondary.setEllipsize(TextUtils.TruncateAt.END);h.secondary.setVisibility(View.VISIBLE);h.secondary.setPadding(0,d(5),0,0);h.card.setBackground(ripple(MainActivity.this,CARD,22));
+                h.face.setVisibility(View.VISIBLE);String state=item.role.equals("agent")?(character!=null&&store.agentPhase(character)!=NativeChat.Phase.IDLE?store.agentPhase(character).name():""):store.listState(store.selected,item.id);
+                if(!state.isBlank()&&!Set.of("Ready","Finished","Stopped").contains(state)){h.badge.setText(state.equals("WAITING")?"Needs you":state.substring(0,1).toUpperCase(Locale.ROOT)+state.substring(1).toLowerCase(Locale.ROOT));h.badge.setVisibility(View.VISIBLE);h.face.mood(state.equals("Needs you")||state.equals("WAITING")?BuddyView.Mood.WAITING:state.equals("Replying")||state.equals("REPLYING")?BuddyView.Mood.REPLYING:BuddyView.Mood.WORKING);}
                 h.card.setOnClickListener(v->{query="";if(item.role.equals("agent")){for(NativeStore.Agent a:store.agents)if(item.id.equals("agent:"+a.key())){store.select(a);break;}}else store.open(item.id,item.text);});h.card.setFocusable(true);
+            }else if(h.type==5){
+                h.face.setVisibility(View.VISIBLE);h.face.mood(store.chat==null?BuddyView.Mood.THINKING:mood(store.chat.phase()));pad(h.card,12,6,6);h.card.setBackgroundColor(Color.TRANSPARENT);h.primary.setTextSize(13);h.primary.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));h.primary.setText(item.text);h.secondary.setText(item.detail);h.secondary.setVisibility(View.VISIBLE);h.card.setOnClickListener(null);
             }else{
-                h.card.setBackground(shape(MainActivity.this,SOFT,26));pad(h.card,24,34,34);h.primary.setText(item.text);h.primary.setTextSize(25);h.primary.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));h.secondary.setText(item.detail);h.secondary.setVisibility(View.VISIBLE);h.secondary.setPadding(0,d(14),0,0);h.card.setOnClickListener(null);if(item.role.equals("empty")&&store.agents.isEmpty()&&!store.loading){h.card.setBackground(ripple(MainActivity.this,SOFT,26));h.secondary.setText("Tap to sign in or set up your Murmur workspace.");h.card.setOnClickListener(v->workspace());}
+                h.face.setVisibility(View.VISIBLE);h.card.setBackground(shape(MainActivity.this,SOFT,26));pad(h.card,24,34,34);h.primary.setText(item.text);h.primary.setTextSize(25);h.primary.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));h.secondary.setText(item.detail);h.secondary.setVisibility(View.VISIBLE);h.secondary.setPadding(0,d(14),0,0);h.card.setOnClickListener(null);if(item.role.equals("empty")&&store.agents.isEmpty()&&!store.loading){h.card.setBackground(ripple(MainActivity.this,SOFT,26));if(!store.error.isBlank()&&!store.needsSignIn){h.primary.setText("Let’s get you reconnected.");h.secondary.setText("Tap to retry, or check Tailscale from the connection menu.");h.card.setOnClickListener(v->store.reconnect());}else{h.primary.setText(store.needsSignIn?"Sign in to your Murmur":"Your agents will be here.");h.secondary.setText("Tap to sign in or set up your Murmur workspace.");h.card.setOnClickListener(v->workspace());}}
             }
         }
         @Override public int getItemCount(){return items.size();}
     }
     private static class Holder extends RecyclerView.ViewHolder{
-        final LinearLayout card;final TextView label,primary,secondary;final int type;
-        Holder(View outer,LinearLayout card,TextView label,TextView primary,TextView secondary,int type){super(outer);this.card=card;this.label=label;this.primary=primary;this.secondary=secondary;this.type=type;}
+        final LinearLayout card;final TextView label,primary,secondary,badge;final BuddyView face;final int type;
+        Holder(View outer,LinearLayout card,TextView label,TextView primary,TextView secondary,TextView badge,BuddyView face,int type){super(outer);this.card=card;this.label=label;this.primary=primary;this.secondary=secondary;this.badge=badge;this.face=face;this.type=type;}
     }
 }

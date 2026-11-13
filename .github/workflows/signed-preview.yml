@@ -1,4 +1,4 @@
-name: Signed preview
+name: Build signed beta
 on:
   workflow_dispatch:
 permissions:
@@ -35,5 +35,5 @@ jobs:
           ./scripts/package-release.sh
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: murmur-companion-signed-pair
-          path: artifacts/
+          name: murmur-companion-signed-beta
+          path: artifacts/signed-beta-*/

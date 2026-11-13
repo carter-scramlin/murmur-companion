@@ -11,6 +11,7 @@ import android.view.*;
 import android.widget.*;
 import com.google.android.gms.wearable.*;
 import org.json.*;
+import dev.murmur.companion.ui.BuddyView;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
@@ -20,6 +21,7 @@ public final class WatchActivity extends androidx.activity.ComponentActivity imp
     private ScrollView scroll;
     private LinearLayout page;
     private TextView status;
+    private BuddyView watchBuddy;
     private JSONObject agent, latestChat;
     private String pendingId, pendingNode, draft = "", operation = "";
     private boolean foreground, busy, uncertain, composing, reading;
@@ -50,6 +52,8 @@ public final class WatchActivity extends androidx.activity.ComponentActivity imp
         // 18% side inset keeps every control within a small round Pixel Watch display.
         int side = (int)(getResources().getDisplayMetrics().widthPixels * .18);
         page.setPadding(side, dp(20), side, dp(40)); scroll.addView(page); setContentView(scroll);
+        watchBuddy=null;
+        if(agent!=null&&title.equals(agent.optString("name"))){watchBuddy=new BuddyView(this);watchBuddy.character(agent.optString("profile","buddy"),(float)agent.optDouble("hue",278));watchBuddy.motionAllowed(false);watchBuddy.mood(latestChat!=null&&latestChat.optBoolean("waiting")?BuddyView.Mood.WAITING:latestChat!=null&&latestChat.optBoolean("busy")?BuddyView.Mood.WORKING:BuddyView.Mood.IDLE);page.addView(watchBuddy,new LinearLayout.LayoutParams(dp(36),dp(36)));}
         page.addView(label(title, 18, Color.rgb(244,237,255), true));
         status = label(subtitle, 12, Color.rgb(175,167,187), false); status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE); page.addView(status);
         scroll.setFocusable(true); scroll.setFocusableInTouchMode(true); scroll.requestFocus();
@@ -98,7 +102,7 @@ public final class WatchActivity extends androidx.activity.ComponentActivity imp
         int oldY = reading && scroll != null ? scroll.getScrollY() : 0;
         reading = true;
         handler.removeCallbacks(poll);
-        shell(agent.optString("name", "Murmur"), "Watch chat · Recent messages");
+        shell(agent.optString("name", "Murmur"), latestChat!=null&&latestChat.optBoolean("busy")?"Working · Recent messages":"Watch chat · Recent messages");
         JSONArray messages = latestChat == null ? null : latestChat.optJSONArray("messages");
         if (messages != null) for (int i = 0; i < messages.length(); i++) {
             JSONObject row = messages.optJSONObject(i);
@@ -167,7 +171,7 @@ public final class WatchActivity extends androidx.activity.ComponentActivity imp
                 if (!response.optBoolean("ok")) { if (completed.equals("send")) { uncertain = true; draft = ""; } showError(response.optString("error", "Open Murmur on your phone.")); return; }
                 if (completed.equals("agents")) showAgents(response);
                 else if (completed.equals("open")) { shell("On your phone", response.optString("status")); chip("Back to chat", true, () -> request("read", "")); }
-                else if (completed.equals("send")) { draft = ""; shell(agent.optString("name"), "Sent · Your agent is working"); chip("Read reply", true, () -> request("read", "")); handler.postDelayed(poll, 2000); }
+                else if (completed.equals("send")) { draft = ""; shell(agent.optString("name"), "Sent · Your agent is working"); if(watchBuddy!=null)watchBuddy.mood(BuddyView.Mood.WORKING); chip("Read reply", true, () -> request("read", "")); handler.postDelayed(poll, 2000); }
                 else { latestChat = response; if (reading) showReader(); else showChat(response); }
             } catch (JSONException ex) { pendingId = null; handler.removeCallbacks(timeout); showError("Update Murmur on both your phone and watch."); }
         });

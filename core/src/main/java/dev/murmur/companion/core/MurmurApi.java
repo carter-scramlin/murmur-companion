@@ -22,15 +22,16 @@ public final class MurmurApi implements AutoCloseable {
     private Request.Builder request(String url) {
         return new Request.Builder().url(url).header("Origin", endpoint.origin).header("Cookie", cookies);
     }
+    public static final class AuthRequired extends IOException { public AuthRequired(String message){super(message);} }
     public JSONObject get(String path) throws Exception {
         if (!path.startsWith("/") || path.startsWith("//")) throw new IOException("Invalid server path");
         try (Response response = client.newCall(request(endpoint.origin + path).build()).execute()) {
-            if (response.code() == 401 || response.code() == 403 || response.isRedirect()) throw new IOException("Open Murmur on your phone and sign in again.");
+            if (response.code() == 401 || response.code() == 403 || response.isRedirect()) throw new AuthRequired("Sign in to Murmur in the workspace, then return to the native app.");
             if (!response.isSuccessful() || response.body() == null) throw new IOException("Murmur is unavailable (" + response.code() + "). Check Tailscale on your phone.");
             if (response.body().contentLength() > 1024 * 1024) throw new IOException("Server response is too large.");
             String text = response.body().source().readUtf8( Math.min(1024 * 1024, response.body().source().request(1024 * 1024) ? 1024 * 1024 : response.body().source().buffer().size()));
             try { return new JSONObject(text); }
-            catch (JSONException ex) { throw new IOException("Open Murmur on your phone to finish signing in."); }
+            catch (JSONException ex) { throw new AuthRequired("Sign in to Murmur in the workspace, then return to the native app."); }
         }
     }
     public interface Listener {

@@ -41,4 +41,28 @@ public class NativeChatTest {
         c.event(event("request.cancel",1,new JSONObject().put("id","approve")));
         assertTrue(c.requests.isEmpty());
     }
+    @Test public void activityProgressesFromThinkingToToolsReplyAndDone()throws Exception{
+        NativeChat c=chat();c.event(event("message.start",1,new JSONObject()));
+        assertEquals(NativeChat.Phase.THINKING,c.phase());assertTrue(c.workStartedAt>0);
+        c.event(event("tool.start",2,new JSONObject().put("name","web_search")));
+        assertEquals(NativeChat.Phase.WORKING,c.phase());assertEquals("Looking things up",c.activityLabel());
+        c.event(event("message.delta",3,new JSONObject().put("text","Here is a plan")));
+        assertEquals(NativeChat.Phase.REPLYING,c.phase());
+        c.event(event("message.complete",4,new JSONObject().put("text","Here is a plan")));
+        assertEquals(NativeChat.Phase.DONE,c.phase());assertFalse(c.busy);
+    }
+    @Test public void waitingRemainsVisibleWhenDeltasArriveAndLegacyApprovalsAreBusy()throws Exception{
+        NativeChat c=chat();c.snapshot(new JSONObject().put("session_id","runtime").put("pending_approval",new JSONObject().put("request_id","ask").put("description","Delete?")));
+        assertTrue(c.busy);assertEquals(NativeChat.Phase.WAITING,c.phase());
+        c.event(event("message.delta",1,new JSONObject().put("text","Please check first")));
+        assertEquals(NativeChat.Phase.WAITING,c.phase());
+        c.event(event("request.cancel",2,new JSONObject().put("request_id","ask")));assertTrue(c.requests.isEmpty());
+    }
+    @Test public void completedSnapshotsDoNotShowAFakeStreamingAnswerAndHistoryStaysBounded()throws Exception{
+        NativeChat c=chat();c.snapshot(new JSONObject().put("session_id","runtime").put("running",false).put("inflight",new JSONObject().put("assistant","A saved answer").put("streaming",false)));
+        assertFalse(c.rows.get(0).streaming);assertFalse(c.busy);assertEquals(NativeChat.Phase.DONE,c.phase());
+        for(int i=0;i<600;i++)c.add("user","message "+i,false);
+        assertEquals(500,c.rows.size());assertEquals("message 599",c.rows.get(499).text);
+    }
+
 }

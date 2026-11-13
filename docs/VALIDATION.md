@@ -1,6 +1,6 @@
 # Validation record
 
-Native preview 0.2.0, prepared November 13, 2026. These results describe this build, not all future versions of Murmur, Android or Wear OS.
+Beta candidate 0.3.0-beta.1, prepared November 13, 2026. These results describe this build, not all future versions of Murmur, Android or Wear OS.
 
 ## Passed locally
 
@@ -8,11 +8,11 @@ Native preview 0.2.0, prepared November 13, 2026. These results describe this bu
 ./gradlew :core:test :phone:testDebugUnitTest :wear:testDebugUnitTest :phone:assembleDebug :wear:assembleDebug :phone:lintDebug :wear:lintDebug
 ```
 
-- **16 core JVM tests:** streaming events and explicit server-request answers, stream offset/sequence deduplication, resumed in-flight replies, gap detection, request restoration/cancellation, plus origin parsing and matching, private HTTP opt-in, invalid addresses, authenticated request headers, no cookie forwarding across HTTP redirects, login HTML refusal, read without chat creation, exact watch-chat create/send sequence, stored/runtime session IDs, no send while approval is waiting, bounded transcripts, out-of-order RPC response matching, and multi-Hermes agent identity with unavailable homes skipped. Some tests cover several assertions.
-- **4 Android runtime tests using Robolectric, Android API 35:** native phone HTTP/WebSocket fixture flow without a WebView, one prompt submission, native reply streaming, draft survival across Activity recreation, native approval details/confirmation without automatic permission; phone onboarding creates successfully and rejects a credential-bearing URL; watch round-screen chat/review layouts render and reviewing a dictated draft does not initiate a send. Draft state is preserved for restoration. These are JVM Android runtime tests, not physical-device tests.
-- **Both debug APKs compile.** Their package IDs match. APK signatures and certificates are checked separately before packaging the local pair.
+- **21 core JVM tests:** agent hue metadata/fallbacks, typed activity transitions, waiting-state retention, completed in-flight snapshots/history bounds, plus streaming events and explicit server-request answers, stream offset/sequence deduplication, resumed in-flight replies, gap detection, request restoration/cancellation, plus origin parsing and matching, private HTTP opt-in, invalid addresses, authenticated request headers, no cookie forwarding across HTTP redirects, login HTML refusal, read without chat creation, exact watch-chat create/send sequence, stored/runtime session IDs, no send while approval is waiting, bounded transcripts, out-of-order RPC response matching, and multi-Hermes agent identity with unavailable homes skipped. Some tests cover several assertions.
+- **8 Android runtime tests using Robolectric, Android API 35:** slow-resume Back behavior, cached-chat completion, read-only reconnect without repeating a prompt, character hue/working card/Stop layout, plus native phone HTTP/WebSocket fixture flow without a WebView, one prompt submission, native reply streaming, draft survival across Activity recreation, native approval details/confirmation without automatic permission; phone onboarding creates successfully and rejects a credential-bearing URL; watch round-screen chat/review layouts render and reviewing a dictated draft does not initiate a send. Draft state is preserved for restoration. These are JVM Android runtime tests, not physical-device tests.
+- **Both debug APKs compile; optimized release APKs also build with R8/resource shrinking and are verified non-debuggable.** Their package IDs match. APK signatures and certificates are checked separately before packaging the local pair.
 - **Android lint:** zero errors. Remaining warnings concern an intentionally pinned target/dependency version and English-only native strings. Native strings are not localized in this preview.
-- **Visual review:** native phone onboarding, conversation list, transcript/composer and approval cards rendered at 1080 × 2400 with 411 × 914 dp qualifiers; watch agent/review screens rendered at 384 × 384 with 192 dp round-display qualifiers. See the images below. No emulator or physical-device screenshot is represented by these renders.
+- **Visual review:** native phone onboarding, conversation list, transcript/composer, working character/activity card and approval cards rendered at 1080 × 2400 with 411 × 914 dp qualifiers; watch agent/review screens rendered at 384 × 384 with 192 dp round-display qualifiers. See the images below. No emulator or physical-device screenshot is represented by these renders.
 
 The Android emulator on this host crashed in its native QEMU process before Android boot completed, with and without Vulkan enabled. This prevented an emulator smoke test; it is not evidence that the app launched on a device.
 
@@ -24,6 +24,10 @@ The Android emulator on this host crashed in its native QEMU process before Andr
 - Umbrel deployment boundary: [Murmur app proxy configuration](https://github.com/getumbrel/umbrel-apps/blob/master/murmur/docker-compose.yml).
 
 The contract tests use local fixtures consistent with that inspected source. They are **not** a live-server compatibility certification. Upstream modifications can affect the native phone and watch clients.
+
+## Beta gates
+
+See [BETA.md](BETA.md). The public candidate uses a temporary preview key; a permanent backed-up distribution key and the signed-build secrets are still required before a broad beta. Desktop signing setup could not be completed because browser control was unavailable in the locked desktop session. Test-signed release validation APKs are not distribution artifacts.
 
 ## Still required before a public stable release
 
@@ -45,6 +49,8 @@ The contract tests use local fixtures consistent with that inspected source. The
 ## Native layout renders
 
 These are actual Android views rendered by Robolectric using fixture data. They demonstrate the local layouts, not a connected personal Murmur or successful watch pairing.
+
+<p><img src="images/phone-native-working.png" width="230" alt="Native Buddy working state with human-readable activity and elapsed time" /></p>
 
 <p><img src="images/phone-native-chats.png" width="230" alt="Native Android conversation list render" /> <img src="images/phone-native-chat.png" width="230" alt="Native Android transcript and composer render" /> <img src="images/phone-native-approval.png" width="230" alt="Native Android approval card render" /></p>
 

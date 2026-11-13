@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0-beta.1 — 2026-11-13
+
+- Native Murmur Buddy characters with agent colours, seeded proportions and state expressions on phone/watch.
+- Persistent activity card with Thinking / Working / Replying / Needs you, human-readable tool activity, elapsed time and Stop.
+- Completion updates for cached chats, responsive Back during slow resumes and stale-navigation guards.
+- Bounded read-only reconnects, scoped draft autosave, bounded history and reduced-motion/battery-saver support.
+- Optimized release builds with R8/resource shrinking, candidate packaging and separate private-key beta workflow.
+- Privacy-preserving beta feedback sheet, GitHub feedback template and an explicit beta readiness/tester record.
+
+Temporary candidate signing and physical-device/live-server checks remain before broad beta distribution.
+
 ## 0.2.0 — 2026-11-13
 
 - Default phone experience rebuilt with native Android lists, agent selection, conversation history, search and Settings.

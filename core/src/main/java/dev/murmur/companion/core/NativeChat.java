@@ -13,7 +13,16 @@ public final class NativeChat {
     }
     public final String hermes, profile, storedId;
     public String runtimeId="", title="New conversation", status="Ready", model="";
+    public enum Phase { IDLE, THINKING, WORKING, REPLYING, WAITING, DONE, STOPPED, ERROR }
+    private Phase phase=Phase.IDLE;
+    public long workStartedAt;
+    public String activity="", lastError="";
     public boolean busy, ready, needsSync;
+    public Phase phase(){return requests.isEmpty()?phase:Phase.WAITING;}
+    public void begin(Phase next,String label){if(!busy||workStartedAt==0)workStartedAt=System.currentTimeMillis();busy=true;phase=next;status=label;}
+    public void unknownActivity(){requests.clear();busy=false;phase=Phase.IDLE;status="Open to sync";seal();}
+    public String stateLabel(){return switch(phase()){case THINKING->"Thinking";case WORKING->"Working";case REPLYING->"Replying";case WAITING->"Needs you";case DONE->"Finished";case STOPPED->"Stopped";case ERROR->"Needs attention";default->"Ready";};}
+    public String activityLabel(){return switch(phase()){case THINKING->"Putting a response together";case WORKING->activity.isBlank()?"Working on your request":activity;case REPLYING->"Writing a reply";case WAITING->"Waiting for your answer";case DONE->"Reply is ready";case STOPPED->"You can continue whenever you're ready";case ERROR->lastError.isBlank()?"Open the conversation to check":lastError;default->"Ready when you are";};}
     public final List<Row> rows = new ArrayList<>();
     public final LinkedHashMap<String,JSONObject> requests = new LinkedHashMap<>();
     private long sequence=-1;
@@ -33,16 +42,22 @@ public final class NativeChat {
             if((role.equals("user")||role.equals("assistant"))&&!text.isBlank())add(role,text,false);
         }
         JSONObject inflight=state.optJSONObject("inflight");
-        if(inflight!=null&&!inflight.optString("assistant").isBlank())add("assistant",inflight.optString("assistant"),true);
+        lastError="";activity="";
+        if(inflight!=null&&!inflight.optString("assistant").isBlank())add("assistant",inflight.optString("assistant"),state.optBoolean("running")||inflight.optBoolean("streaming"));
         busy=state.optBoolean("running")||Set.of("working","starting","streaming","waiting").contains(state.optString("status"));
+        phase=busy?(inflight!=null&&!inflight.optString("assistant").isBlank()?Phase.REPLYING:Phase.WORKING):rows.isEmpty()?Phase.IDLE:Phase.DONE;
+        long started=state.optLong("turn_started_at",state.optLong("started_at",0));if(started>0&&started<100000000000L)started*=1000;
+        workStartedAt=busy?(started>0?Math.min(started,System.currentTimeMillis()):System.currentTimeMillis()):0;
+        if(inflight!=null&&!inflight.optString("error").isBlank()){lastError=inflight.optString("error");phase=Phase.ERROR;}
         JSONArray open=state.optJSONArray("open_requests");
         if(open!=null)for(int i=0;i<open.length();i++)request(open.getJSONObject(i));
         JSONObject approval=state.optJSONObject("pending_approval");
         if(approval!=null&&requests.isEmpty())requests.put("legacy:"+approval.optString("request_id"),new JSONObject().put("id","legacy:"+approval.optString("request_id")).put("method","approval").put("params",approval));
+        if(!requests.isEmpty())busy=true;
         ready=true; status=requests.isEmpty()?(busy?"Working…":"Up to date"):"Needs you";
     }
     public String key(){return hermes+":"+profile+":"+storedId;}
-    public void add(String role,String text,boolean streaming){ rows.add(new Row("native-"+(++nextRow),role,text,streaming)); }
+    public void add(String role,String text,boolean streaming){ rows.add(new Row("native-"+(++nextRow),role,text,streaming));while(rows.size()>500)rows.remove(0); }
     public void request(JSONObject frame){ requests.put(String.valueOf(frame.opt("id")),frame); busy=true; status="Needs you"; }
     public void event(JSONObject event) {
         if(!runtimeId.equals(event.optString("session_id")))return;
@@ -56,7 +71,7 @@ public final class NativeChat {
         JSONObject p=event.optJSONObject("payload");if(p==null)p=new JSONObject();
         String text=p.opt("text") instanceof String?p.optString("text"):"";
         switch(event.optString("type")){
-            case "message.start" -> { busy=true;status="Thinking…"; }
+            case "message.start" -> { begin(Phase.THINKING,"Thinking…");activity="";lastError=""; }
             case "message.delta" -> {
                 if(text.isEmpty())return;
                 String t=p.optString("turn_id",turn);int s=p.optInt("segment",segment);
@@ -66,24 +81,36 @@ public final class NativeChat {
                 if(offset>row.text.length()){needsSync=true;return;}
                 int overlap=row.text.length()-offset;
                 if(overlap<text.length())row.text+=text.substring(Math.max(0,overlap));
-                busy=true;status="Replying…";
+                begin(Phase.REPLYING,"Replying…");
             }
             case "message.interim" -> { Row row=tail();if(row!=null&&row.streaming){if(!text.isEmpty())row.text=text;row.streaming=false;}else if(!text.isEmpty()&&!p.optBoolean("already_streamed"))add("assistant",text,false); }
             case "message.complete" -> {
                 Row row=tail();if(row!=null&&row.streaming){if(!text.isBlank())row.text=text;row.streaming=false;}else if(!text.isBlank()&&(row==null||!row.role.equals("assistant")||!row.text.equals(text)))add("assistant",text,false);
-                busy=false;status="interrupted".equals(p.optString("status"))?"Stopped":"Up to date";
+                busy=false;activity="";phase="interrupted".equals(p.optString("status"))?Phase.STOPPED:"error".equals(p.optString("status"))?Phase.ERROR:Phase.DONE;lastError=p.optString("error","");status=phase==Phase.STOPPED?"Stopped":phase==Phase.ERROR?"Needs attention":"Up to date";
                 if("error".equals(p.optString("status")))add("notice",p.optString("error","The agent could not finish that reply."),false);
             }
-            case "tool.start" -> { seal();busy=true;status="Using "+p.optString("name","a tool").replace('_',' ')+"…"; }
-            case "tool.complete" -> {status=requests.isEmpty()?"Working…":"Needs you";}
+            case "tool.start" -> { seal();activity=toolLabel(p);begin(Phase.WORKING,activity); }
+            case "tool.complete" -> {if(busy){phase=Phase.WORKING;activity="Putting the results together";status=requests.isEmpty()?"Working…":"Needs you";}}
             case "session.title" -> title=p.optString("title",title);
             case "session.info" -> {model=p.optString("model",model);title=p.optString("title",title);}
             case "request.cancel", "approval.cancelled" -> { String requestId=p.optString("id",p.optString("request_id"));requests.remove(requestId);requests.remove("legacy:"+requestId); status=requests.isEmpty()?(busy?"Working…":"Up to date"):"Needs you"; }
-            case "error" -> { add("notice",p.optString("message","Murmur reported an error."),false);busy=false;status="Needs attention"; }
+            case "error" -> { add("notice",p.optString("message","Murmur reported an error."),false);busy=false;phase=Phase.ERROR;lastError=p.optString("message","Murmur reported an error.");status="Needs attention"; }
             default -> { }
         }
         if(!requests.isEmpty())status="Needs you";
     }
+    private String toolLabel(JSONObject payload){
+        JSONArray labels=payload.optJSONArray("labels");if(labels!=null&&labels.length()>0){JSONObject label=labels.optJSONObject(0);if(label!=null&&!label.optString("text").isBlank())return clip(label.optString("text"));}
+        String name=payload.optString("name","").toLowerCase(Locale.ROOT);
+        if(name.contains("search"))return "Looking things up";
+        if(name.contains("browse")||name.contains("fetch")||name.contains("web"))return "Reading a page";
+        if(name.contains("write")||name.contains("edit"))return "Updating a file";
+        if(name.contains("read")||name.contains("file"))return "Checking files";
+        if(name.contains("exec")||name.contains("terminal")||name.contains("shell"))return "Running a command";
+        if(name.contains("memory"))return "Checking memory";
+        return "Using a tool";
+    }
+    private static String clip(String value){return value.length()>120?value.substring(0,120)+"…":value;}
     private Row tail(){return rows.isEmpty()?null:rows.get(rows.size()-1);}
     private void seal(){Row row=tail();if(row!=null)row.streaming=false;}
 }

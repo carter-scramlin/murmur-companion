@@ -203,7 +203,7 @@ public class WorkspaceActivity extends androidx.activity.ComponentActivity {
                 case 4 -> openExternal(endpoint.origin);
                 case 5 -> showConnection();
                 case 6 -> new AlertDialog.Builder(this).setTitle("Forget this device?").setMessage("Remove saved server details and this app's sign-in cookies. Your chats stay on Murmur.").setPositiveButton("Forget", (d,w) -> forget()).setNegativeButton("Cancel", null).show();
-                case 7 -> new AlertDialog.Builder(this).setTitle("Murmur Companion 0.2.0").setMessage("Independent Android and Wear OS clients for Murmur by Umbrel. Not affiliated with or endorsed by Umbrel or Tailscale.\n\nYour conversations go to your server. The watch relays through your phone.\n\nThis is the optional full workspace. The main phone interface uses native Android screens. Background web push and browser-only sign-ins may require Chrome; see the feature matrix in the README.").setPositiveButton("Done", null).show();
+                case 7 -> new AlertDialog.Builder(this).setTitle("Murmur Companion 0.3.0 beta candidate").setMessage("Independent Android and Wear OS clients for Murmur by Umbrel. Not affiliated with or endorsed by Umbrel or Tailscale.\n\nYour conversations go to your server. The watch relays through your phone.\n\nThis is the optional full workspace. The main phone interface uses native Android screens. Background web push and browser-only sign-ins may require Chrome; see the feature matrix in the README.").setPositiveButton("Done", null).show();
             } return true;
         }); menu.show();
     }

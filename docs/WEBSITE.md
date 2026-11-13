@@ -18,8 +18,8 @@ The **Publish download website** workflow runs on pushes to `main` or manual dis
 
 The workflow requests Pages enablement during configuration. If repository policy prevents automatic enablement, open the repository's Settings → Pages → Source and choose **GitHub Actions**, then rerun the workflow. GitHub Pages and Actions must be available for the repository/account. The public URL after successful deployment is normally `https://carter-scramlin.github.io/murmur-companion/`; verify the actual deployment output before announcing it as live.
 
-These are preview debug builds. A fresh clean Actions runner can create a different signing key from a previous run. Both APKs in a published release match and stay fixed, but stable upgrades across versions require a permanent release signing key. See [release signing](RELEASING.md). The site and install guide identify the builds as previews.
+These are optimized, non-debuggable candidate builds signed with the runner preview key. A fresh clean Actions runner can create a different signing key from a previous run. Both APKs in a published release match and stay fixed, but stable upgrades across versions require a permanent release signing key. See [release signing](RELEASING.md). The site and install guide identify the builds as previews.
 
 ## Versioned release downloads
 
-The download buttons now use the fixed v0.2.0 GitHub Release assets. The Pages workflow deploys only the static site. The separate preview release workflow builds and verifies both apps before publishing. See [RELEASING.md](RELEASING.md).
+The download buttons now use the fixed v0.3.0-beta.1 GitHub Release assets. The Pages workflow deploys only the static site. The separate preview release workflow builds and verifies both apps before publishing. See [RELEASING.md](RELEASING.md).

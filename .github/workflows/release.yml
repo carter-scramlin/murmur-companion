@@ -1,3 +1,4 @@
+# Candidate 1 includes the cached-completion badge regression fix.
 name: Build and publish beta candidate
 on:
   push:

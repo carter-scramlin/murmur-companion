@@ -168,9 +168,10 @@ public class NativeStore extends AndroidViewModel {
     private void scheduleReconnect(){main.removeCallbacks(retry);if(visible&&!needsSignIn&&reconnectAttempt<3)main.postDelayed(retry,1000L<<reconnectAttempt);}
     public NativeChat cachedChat(Agent agent,String id){return agent==null?null:cache.get(agent.key()+":"+id);}
     public String listState(Agent agent,String id){
+        NativeChat cached=cachedChat(agent,id);if(cached!=null)return cached.stateLabel();
         JSONObject row=agent==null?null:active.get(agent.key()+":"+id);
         if(row!=null)return switch(row.optString("status")){case "working","starting","resuming"->"Working";case "streaming"->"Replying";case "waiting"->"Needs you";default->"";};
-        NativeChat cached=cachedChat(agent,id);return cached==null?"":cached.stateLabel();
+        return "";
     }
     public NativeChat.Phase agentPhase(Agent agent){
         NativeChat.Phase result=NativeChat.Phase.IDLE;

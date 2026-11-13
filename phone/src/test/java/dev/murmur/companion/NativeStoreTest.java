@@ -55,7 +55,7 @@ public class NativeStoreTest {
         store.open("stored","Hello");await(()->store.chat!=null&&store.chat.ready&&!store.loading);
         send("message.start",1,new JSONObject());await(()->store.chat.busy);NativeChat cached=store.chat;store.back();await(()->!store.loading);
         send("message.complete",2,new JSONObject().put("text","All done"));await(()->!cached.busy&&!cached.rows.isEmpty());
-        assertEquals(NativeChat.Phase.DONE,cached.phase());assertEquals("All done",cached.rows.get(0).text);assertEquals(NativeChat.Phase.IDLE,store.agentPhase(store.selected));
+        assertEquals("Finished",store.listState(store.selected,"stored"));assertEquals(NativeChat.Phase.DONE,cached.phase());assertEquals("All done",cached.rows.get(0).text);assertEquals(NativeChat.Phase.IDLE,store.agentPhase(store.selected));
     }
     @Test public void reconnectResumesReadOnlyAndNeverRepeatsAPrompt()throws Exception{
         store.open("stored","Hello");await(()->store.chat!=null&&store.chat.ready&&!store.loading);store.send("Hello once");await(()->prompts.get()==1&&!store.sending);

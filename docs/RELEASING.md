@@ -29,6 +29,12 @@ The script runs tests, lint, signed release builds, verifies both APK signatures
 
 For local testing use debug builds. Debug APKs built in one CI job share a key, but that key is generated afresh on a clean runner and is unsuitable for a stable update channel.
 
+## Public preview downloads
+
+The [v0.1.0 GitHub Release](https://github.com/carter-scramlin/murmur-companion/releases/tag/v0.1.0) provides both installable debug APKs, a combined ZIP, instructions, checksums and a public signing fingerprint. The **Build and publish preview release** workflow tests, lints, builds and verifies the matching pair, uploads every asset to a draft, then publishes it as a prerelease. Published assets are preserved on reruns. If a failed upload leaves a draft, inspect and remove that incomplete draft before rerunning.
+
+The download website links to these fixed release assets. Pages deployments do not rebuild the apps or replace their signing key. For a new preview version, update both app versions, the packaging scripts, release workflow/tag, release notes and website links together. Keep using a permanent private signing key for a stable update channel.
+
 ## GitHub Actions
 
 The CI workflow runs tests, lint and both debug builds, then uploads one ZIP containing both APKs and checksums. Keep that pair together.
@@ -38,6 +44,6 @@ The manual **Signed preview** workflow uses repository secrets:
 - `MURMUR_KEYSTORE_B64`: base64 encoding of the release keystore.
 - `MURMUR_STORE_PASSWORD`, `MURMUR_KEY_ALIAS`, `MURMUR_KEY_PASSWORD`.
 
-Only trusted repository collaborators should run it. It uploads signed APK artifacts and validation reports; it does not create a public release. Before publishing, complete the physical-device checklist in [VALIDATION.md](VALIDATION.md), choose a version, update both modules' `versionName`/`versionCode`, update the changelog, then attach the two APKs and checksums to your reviewed GitHub Release manually.
+Only trusted repository collaborators should run it. It uploads signed APK artifacts and validation reports; it does not create a public release. For a stable release, complete the physical-device checklist in [VALIDATION.md](VALIDATION.md), choose a version, update both modules' `versionName`/`versionCode`, update the changelog, then attach the two APKs and checksums to your reviewed GitHub Release manually.
 
 No signed distribution key is created or committed by this preview project.

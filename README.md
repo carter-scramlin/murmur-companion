@@ -7,6 +7,7 @@
 
 <p align="center">
   <a href="https://carter-scramlin.github.io/murmur-companion/">Download website</a> ·
+  <a href="https://github.com/carter-scramlin/murmur-companion/releases">Releases & APKs</a> ·
   <a href="docs/INSTALL.md">Install</a> ·
   <a href="docs/TAILSCALE.md">Connect with Tailscale</a> ·
   <a href="docs/FEATURES.md">Feature coverage</a> ·
@@ -44,7 +45,9 @@ Pixel Watch  ← Wear OS Data Layer →  Android phone  ← Tailscale →  Murmu
 
 **Preview release: 0.1.0.** Android 9+ on the phone; Wear OS 3+ on a paired watch. Pixel Watch is the intended watch form factor. Google Play services is required on both devices for the watch connection.
 
-Build both APKs together so they share the same signing certificate:
+**[Download the phone + watch APK bundle →](https://github.com/carter-scramlin/murmur-companion/releases/download/v0.1.0/murmur-companion-0.1.0-debug.zip)** No build tools needed. Individual APKs, installation instructions and checksums are under [Releases](https://github.com/carter-scramlin/murmur-companion/releases/tag/v0.1.0). Install the phone APK on Android, then install the matching watch APK using the wireless ADB steps in the guide.
+
+To build from source, build both APKs together so they share the same signing certificate:
 
 ```bash
 ./gradlew :core:test :phone:testDebugUnitTest :wear:testDebugUnitTest :phone:assembleDebug :wear:assembleDebug

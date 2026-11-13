@@ -1,0 +1,66 @@
+name: Build and publish preview release
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/release.yml
+      - scripts/prepare-preview-release.py
+      - docs/releases/0.1.0.md
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: release-v0.1.0
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: v0.1.0
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Keep a published version unchanged
+        id: existing
+        run: |
+          if gh release view "$RELEASE_TAG" --json isDraft > "$RUNNER_TEMP/release.json"; then
+            python3 -c 'import json,sys; assert not json.load(open(sys.argv[1]))["isDraft"], "An incomplete draft already exists. Inspect it before retrying."' "$RUNNER_TEMP/release.json"
+            echo 'published=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'published=false' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        if: steps.existing.outputs.published != 'true'
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+        if: steps.existing.outputs.published != 'true'
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@4c125117fe7c5aed11272ec4213f602f012f89f2 # v5
+        if: steps.existing.outputs.published != 'true'
+      - name: Install Android SDK
+        if: steps.existing.outputs.published != 'true'
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Test, lint and build both apps
+        if: steps.existing.outputs.published != 'true'
+        run: ./gradlew :core:test :phone:testDebugUnitTest :wear:testDebugUnitTest :phone:lintDebug :wear:lintDebug :phone:assembleDebug :wear:assembleDebug --console=plain
+      - name: Verify signatures and package downloads
+        if: steps.existing.outputs.published != 'true'
+        run: python3 scripts/prepare-preview-release.py
+      - name: Upload all assets before publishing
+        if: steps.existing.outputs.published != 'true'
+        run: |
+          gh release create "$RELEASE_TAG" artifacts/preview-release/* \
+            --target "$GITHUB_SHA" --draft --prerelease \
+            --title 'Murmur Companion 0.1.0 preview' \
+            --notes-file docs/releases/0.1.0.md
+          gh release edit "$RELEASE_TAG" --draft=false
+      - name: Release link
+        run: |
+          echo '## Downloads' >> "$GITHUB_STEP_SUMMARY"
+          gh release view "$RELEASE_TAG" --json url --jq .url >> "$GITHUB_STEP_SUMMARY"

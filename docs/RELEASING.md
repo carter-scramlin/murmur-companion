@@ -4,7 +4,7 @@ Phone and watch must share an application ID and signing certificate. Preserve a
 
 ## Public candidate
 
-The [0.3.0 beta candidate](https://github.com/carter-scramlin/murmur-companion/releases/tag/v0.3.0-beta.1) provides optimized, non-debuggable release APKs, the matching ZIP, guide, checksums and certificate fingerprint. **Build and publish beta candidate** runs tests/lint/debug builds, then builds optimized APKs using the runner's temporary Android preview key. Published assets are preserved on reruns. An incomplete draft must be inspected/removed before retrying.
+The [0.3.0 beta candidate](https://github.com/carter-scramlin/murmur-companion/releases/tag/v0.3.0-beta.1) provides optimized, non-debuggable release APKs, the matching ZIP, guide, checksums and certificate fingerprint. **Build and publish beta candidate** runs tests/lint/debug builds, then builds optimized APKs using a dedicated temporary candidate key that is removed after packaging. Published assets are preserved on reruns. An incomplete draft must be inspected/removed before retrying.
 
 The temporary candidate key is not a stable signing channel. Independently built candidates may require uninstalling old apps. The website links to fixed release assets and does not rebuild them on Pages deploys. See [BETA.md](BETA.md) for the gates before broad distribution.
 

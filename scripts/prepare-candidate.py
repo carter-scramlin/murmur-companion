@@ -26,7 +26,7 @@ certificates=[];apks=[]
 for module in ('phone','wear'):
     source=root/module/'build/outputs/apk/release'/f'{module}-release.apk'
     result=subprocess.check_output([str(tools/'apksigner'),'verify','--print-certs',str(source)],text=True)
-    if signed and 'android debug' in result.lower():raise SystemExit('Signed beta requires a private distribution key, not an Android debug key.')
+    if signed and ('android debug' in result.lower() or 'murmur companion candidate' in result.lower()):raise SystemExit('Signed beta requires a private distribution key, not an Android debug key.')
     certificates.append(re.search(r'certificate SHA-256 digest: (\w+)',result).group(1))
     badging=subprocess.check_output([str(tools/'aapt'),'dump','badging',str(source)],text=True)
     if 'application-debuggable' in badging:raise SystemExit('Candidate must use a non-debuggable release build.')

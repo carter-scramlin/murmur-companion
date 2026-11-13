@@ -149,6 +149,19 @@ public class MurmurApiTest {
             JSONObject reply=answers.poll(3,TimeUnit.SECONDS);assertEquals("permission",reply.getString("id"));assertEquals("deny",reply.getJSONObject("result").getString("choice"));
         }
     }
+    @Test public void nativePasswordLoginUsesSavedOriginAndReturnsOnlyCookieHeaders()throws Exception{
+        server.enqueue(new MockResponse().setBody("{\"ok\":true}").addHeader("Set-Cookie","murmur_session=new; Path=/; HttpOnly"));
+        assertEquals(List.of("murmur_session=new; Path=/; HttpOnly"),api.login("password"));RecordedRequest request=server.takeRequest();assertEquals("POST",request.getMethod());assertEquals("/murmur/login",request.getPath());assertEquals("password",new JSONObject(request.getBody().readUtf8()).getString("password"));assertEquals(server.url("/").toString().replaceAll("/$",""),request.getHeader("Origin"));
+        server.enqueue(new MockResponse().setResponseCode(401).setBody("{}"));try{api.login("wrong");fail();}catch(IOException expected){assertTrue(expected.getMessage().contains("password"));}
+    }
+    @Test public void revisionFencedNativeEditsAndStreamingMultipartUseExplicitHome()throws Exception{
+        server.enqueue(new MockResponse().setBody("{\"ok\":true}"));api.http("PATCH","/hermes/api/sessions/stored?hermes=home",new JSONObject().put("archived",true).put("expected_revision",7));RecordedRequest edit=server.takeRequest();assertEquals("PATCH",edit.getMethod());assertEquals(7,new JSONObject(edit.getBody().readUtf8()).getInt("expected_revision"));
+        java.io.File file=java.io.File.createTempFile("murmur-upload-",".txt");try{java.nio.file.Files.writeString(file.toPath(),"attachment content");server.enqueue(new MockResponse().setBody("{\"path\":\"/agent/attachments/note.txt\"}"));assertEquals("/agent/attachments/note.txt",api.upload("home","/agent/attachments/note.txt","note.txt",file,"text/plain").getString("path"));RecordedRequest upload=server.takeRequest();assertEquals("/hermes/api/files/upload-stream?hermes=home",upload.getPath());assertTrue(upload.getHeader("Content-Type").startsWith("multipart/form-data"));String body=upload.getBody().readUtf8();assertTrue(body.contains("attachment content"));assertTrue(body.contains("/agent/attachments/note.txt"));assertTrue(body.contains("name=\"overwrite\""));}finally{file.delete();}
+    }
+    @Test public void watchStopInterruptsExistingChatWithoutCreatingOrSubmitting()throws Exception{
+        List<String> methods=new ArrayList<>();socket((method,params)->{methods.add(method);return switch(method){case "session.list"->new JSONObject().put("sessions",new JSONArray().put(new JSONObject().put("id","stored").put("title","Watch chat")));case "session.resume"->new JSONObject().put("session_id","runtime").put("running",true);case "session.interrupt"->{assertEquals("runtime",params.getString("session_id"));yield new JSONObject();}default->throw new AssertionError(method);};});
+        assertTrue(WatchActions.execute(api,request("stop")).getBoolean("busy"));assertEquals(List.of("session.list","session.resume","session.interrupt"),methods);
+    }
     private JSONObject request(String action) throws Exception { return new JSONObject().put("action", action).put("hermes", "main").put("profile", "default"); }
     interface Reply { JSONObject result(String method, JSONObject params) throws Exception; }
     private void socket(Reply reply) {

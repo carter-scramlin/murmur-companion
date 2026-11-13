@@ -1,49 +1,44 @@
-# Feature coverage
+# Feature coverage — 0.3.0-beta.2
 
-Version 0.3.0-beta.1 makes the everyday phone experience native Android. Agent lists, conversations, search, the message composer, streamed text replies, stop, rename, copy, dictation, one-time approvals and clarification forms are Android views. A WebView is not created for those screens.
-
-The explicit **Full Murmur workspace** screen retains the server's interface for advanced features and sign-in. Native chat is not yet a complete replacement for every desktop feature. Physical-device validation is still required.
+Murmur Beta uses native Android views for everyday conversations, files, sign-in and common management. **Full Murmur workspace** retains the server interface for advanced features. It remains necessary for full desktop feature access.
 
 | Feature | Android phone | Wear OS |
 |---|---|---|
-| Agent selection and multiple Hermes homes | Native; agents labeled by home | Native; up to 8 homes / 60 agents |
-| Agent creation, editing, personalities | Full workspace | Continue on phone |
-| Conversations, recent history, list search, create, rename | Native; up to 100 recent chats per agent and 500 transcript rows per snapshot | One named Watch chat per agent; bounded recent text |
-| Pin, archive, delete, older history | Full workspace | Continue on phone |
-| Streaming text replies | Native WebSocket events; in-memory transcript and connection retained across rotation | Foreground refresh every 5 seconds while busy |
-| Stop response | Native explicit interrupt | Continue on phone |
-| Approvals | Native Allow once / Don't allow for offered choices; action details and confirmation before allowing | Needs-you status; answer on phone |
-| Clarification questions | Native forms, choices and free-text answers | Continue on phone |
-| Tool steps, plans, helpers, rich results | Native live activity label; complete visualizations in Full workspace | Text only |
-| Text formatting, copy, links | Native basic Markdown spans, selectable text and copy | Text only |
-| Dictation | Android speech recognizer inserts a draft; tap Send to submit | Reviewed native dictation |
-| Files/photos, rich media, calls and read-aloud | Full workspace; native Android file picker/direct Save as and microphone permission there | Continue on phone |
-| Models, providers, reasoning, memory, routines, goals | Full workspace | Uses the agent's configured model |
-| Groups, app integrations, WhatsApp, Telegram and Umbrel setup | Full workspace | Continue on phone |
-| Saved drafts | App-private preferences plus in-memory drafts; retained on navigation/recreation | Activity restoration |
-| Offline access | Previously opened chat stays in memory during this process; reconnect to refresh/send. No offline send queue. | Needs reachable paired phone |
-| Tailscale | Normal Android VPN routing; HTTPS and explicit private HTTP option | Paired phone relay; no separate watch VPN |
-| Watch handoff | Reminder targets the selected agent's existing Watch chat in the native phone UI | Continue on phone |
-| Dark theme | Native phone screens currently light; workspace follows server theme | Native black interface |
-| Background Web Push | Not implemented; use a compatible browser/PWA | No proactive agent notifications |
-| Home widgets / watch tiles / complications | Not implemented | Not implemented |
+| Agent selection and multiple homes | Native | Native, paired phone relay |
+| Agent creation/personality editing | Native menu, selected home | Continue on phone |
+| Conversations, create, rename, search | Native; recent list pages of 100 | One Watch chat per agent |
+| Pin, unpin, archive, restore, delete | Native; revision-fenced edits; delete confirmation | Continue on phone |
+| Older transcript history | Native reader, pages of 100; live chat retains up to 500 rows | Bounded recent text |
+| Live text and stop | Native streaming connection, explicit Stop | Foreground refresh; native Stop reply |
+| Approvals and clarification | Native cards and forms | Needs-you state; continue on phone |
+| Secret/sudo/vault string requests | Masked native dialog, explicit Send/Skip, no read-cache persistence | Continue on phone |
+| Tool summaries, plans and helpers | Native bounded text and live progress | Text/status |
+| Rich tools, interactive browser and setup cards | Full workspace | Continue on phone |
+| Files and photos in native chat | Android picker; streamed upload to selected agent; 25 MB photos / 100 MB files | Continue on phone |
+| Models/providers and thinking | Native per-conversation picker | Configured agent model |
+| Share/export and read-aloud | Native share of shown messages and system text-to-speech | Reply reader |
+| Groups, memory, routines/goals and integrations | Full workspace | Continue on phone |
+| Murmur password sign-in | Native; cookies shared with Workspace | Uses paired phone sign-in |
+| Umbrel gateway / provider OAuth | Workspace; provider/browser restrictions still apply | Continue on phone |
+| Drafts and offline reading | Private saved drafts; optional private read cache of ten chats | Activity restoration; phone required |
+| Tailscale | Android VPN routing; HTTPS or explicit private HTTP | Phone relay; no watch VPN needed |
+| Appearance and characters | System/light/dark; native Buddy, working states, reduced motion | Black round-screen UI; static Buddy |
+| Reply notifications | Explicit 30-minute foreground follow of one running reply | May mirror phone notifications through system settings |
+| General Web Push, widgets, tiles, complications | Not implemented | Not implemented |
+| Standalone watch networking | — | Not implemented; paired phone required |
 
-## Characters and activity (beta candidate 1)
+## Behavior and bounds
 
-Murmur's MIT Buddy designs are adapted to native Canvas views, with profile hue metadata, deterministic proportions, expressions and gentle motion during active work. They appear in agent cards, conversation headers, assistant rows, empty states and activity cards. The watch shows a static character for its selected agent. No hosted image fetch or browser renderer is used for these characters.
+Reconnects read the server and never resubmit uncertain prompts. Saved chats open without network but cannot send until synced. Offline cache can be disabled/deleted in Settings; Forget this device clears all saved read copies and drafts. Files selected for upload are copied to a bounded temporary file and removed after the upload attempt. An attachment is staged on the server only after you select it; sending the message remains explicit. Native text sharing exports the displayed messages, not unseen history. The full-history reader requires a server supporting stored message pagination.
 
-Thinking, Working, Replying, Needs you and Finished are also written as text. The persistent activity card shows elapsed time, human-readable tool activity and Stop. Cached chats process completion events even when you return to the list. The phone honours the reduced-motion preference, Android animator settings and battery saver. Watch motion stays disabled to limit power use.
+Native model changes are scoped to the current conversation. The server remains responsible for model availability and may ask for cost confirmation. Agent personality changes affect that agent on your server.
 
-Native reconnects are read-only, with up to three attempts while foregrounded. Failed/uncertain sends are never resubmitted automatically. Slow chat loads can be left with Back, and late responses cannot take over a newer screen. Drafts persist after a short debounce as well as on navigation/backgrounding.
+The opt-in reply monitor uses a visible data-sync foreground service, checks activity every 20 seconds, stops after completion/needs-input, three failed checks, manual cancellation, or 30 minutes. Android can defer network/CPU work while asleep; this is not a push notification backend or a guarantee of instant background delivery. It never submits prompts or responds to requests. Keep the app open for the most immediate activity display.
 
-See [BETA.md](BETA.md) for signing and hardware gates before broad distribution.
+## Remaining limits
 
-## Connection and sign-in
+Full native desktop parity is not implemented. Groups, memory editing, routine/goal management, integration setup, interactive browser actions and complex result visualizations use Full workspace. Native result summaries are bounded to 4,000 characters; use Workspace for complete rich output. Unsupported renderer requests are explicitly declined, never auto-approved; reopen Workspace and ask the agent to continue there.
 
-Sign-in uses the explicit workspace screen and its app-private WebView cookie store. Native API calls and the watch relay reuse cookies only for the saved Murmur origin. Chrome has a separate cookie store. Some OAuth providers reject embedded sign-in; opening Chrome does not automatically sign in the app.
+Some identity providers reject embedded browsers, and Chrome cookies do not transfer into this app. A client cannot bypass those provider restrictions; configure/sign in through a supported server flow. Workspace blob downloads and browser-specific media still require integration; direct same-origin HTTP(S) file saving and native text export work. General Web Push, standalone watch access, widgets, watch tiles and complications remain unimplemented.
 
-Native sockets are reused while active and released after the phone activity has been in the background for 20 seconds. Returning reconnects and resumes the chat from the server. Reconnect is read-only and never replays a prompt. If delivery is uncertain, read the chat before sending again.
-
-Native chat handles approval and clarification server requests. Other renderer requests, such as secrets, setup cards and interactive browser actions, require Full workspace and are explicitly declined as unsupported by the native renderer. Reopen the workspace and ask the agent to continue there. Nothing is auto-approved. Large snapshots exceeding the transport limit need the full workspace.
-
-The explicit workspace retains the 0.1.0 WebView limitations: background Web Push is absent; some OAuth, blob exports and browser-specific media features need further integration. Direct same-origin HTTP(S) file saving is supported there.
+APK identity, signatures, test fixtures, Android UI renders and lint are checked. Physical phone/Pixel Watch installation, live Murmur, Tailscale transitions and Android background behavior require device validation. See [BETA.md](BETA.md).

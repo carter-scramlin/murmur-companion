@@ -3,12 +3,14 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <queries><package android:name="com.tailscale.ipn" /></queries>
-    <application android:theme="@style/AppTheme" android:label="Murmur Companion" android:icon="@mipmap/ic_launcher" android:allowBackup="false" android:dataExtractionRules="@xml/data_extraction_rules" android:fullBackupContent="false" android:usesCleartextTraffic="true" android:supportsRtl="true">
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" /><uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" /><queries><intent><action android:name="android.intent.action.TTS_SERVICE" /></intent><package android:name="com.tailscale.ipn" /></queries>
+    <application android:theme="@style/AppTheme" android:label="Murmur Beta" android:icon="@mipmap/ic_launcher" android:allowBackup="false" android:dataExtractionRules="@xml/data_extraction_rules" android:fullBackupContent="false" android:usesCleartextTraffic="true" android:supportsRtl="true">
         <activity android:name=".MainActivity" android:exported="true" android:windowSoftInputMode="adjustResize">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>
+        <activity android:name=".HistoryActivity" android:exported="false" />
         <activity android:name=".WorkspaceActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <service android:name=".ReplyMonitorService" android:exported="false" android:foregroundServiceType="dataSync" />
         <service android:name=".WatchRelayService" android:exported="true">
             <intent-filter>
                 <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />

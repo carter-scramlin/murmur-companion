@@ -3,7 +3,7 @@ package dev.murmur.companion.core;
 import org.json.*;
 import java.util.*;
 
-/** In-memory transcript. No web rendering, disk transcript cache or automatic prompt retry. */
+/** In-memory transcript. No web rendering or automatic prompt retry. */
 public final class NativeChat {
     public static final class Row {
         public final String id, role;
@@ -39,8 +39,9 @@ public final class NativeChat {
             JSONObject row=history.getJSONObject(i); String role=row.optString("role");
             if("hidden".equals(row.optString("display_kind")))continue;
             String text=row.optString("display_content",row.optString("text",row.opt("content") instanceof String ? row.optString("content") : ""));
-            if((role.equals("user")||role.equals("assistant"))&&!text.isBlank())add(role,text,false);
+            if((role.equals("user")||role.equals("assistant")||role.equals("tool"))&&!text.isBlank())add(role,role.equals("tool")?bounded(text):text,false);
         }
+        JSONObject todo=state.optJSONObject("todo_state");if(todo!=null)plan(todo.optJSONArray("todos"));
         JSONObject inflight=state.optJSONObject("inflight");
         lastError="";activity="";
         if(inflight!=null&&!inflight.optString("assistant").isBlank())add("assistant",inflight.optString("assistant"),state.optBoolean("running")||inflight.optBoolean("streaming"));
@@ -90,7 +91,12 @@ public final class NativeChat {
                 if("error".equals(p.optString("status")))add("notice",p.optString("error","The agent could not finish that reply."),false);
             }
             case "tool.start" -> { seal();activity=toolLabel(p);begin(Phase.WORKING,activity); }
-            case "tool.complete" -> {if(busy){phase=Phase.WORKING;activity="Putting the results together";status=requests.isEmpty()?"Working…":"Needs you";}}
+            case "tool.complete" -> {String summary=p.optString("summary",p.optString("result_text",""));if(!summary.isBlank())add("tool",p.optString("name","Tool")+"\n"+bounded(summary),false);if(p.optJSONArray("todos")!=null)plan(p.optJSONArray("todos"));if(busy){phase=Phase.WORKING;activity="Putting the results together";status=requests.isEmpty()?"Working…":"Needs you";}}
+            case "tool.progress" -> {String message=p.optString("message");if(!message.isBlank()){activity=clip(message);if(busy)status=activity;}}
+            case "todo.updated" -> plan(p.optJSONArray("todos"));
+            case "subagent.start", "subagent.progress", "subagent.tool", "subagent.thinking" -> {activity="Helper: "+clip(p.optString("goal",p.optString("text","Working")));if(busy)status=activity;}
+            case "subagent.complete" -> {String summary=p.optString("summary",p.optString("text",""));if(!summary.isBlank())add("tool","Helper finished\n"+bounded(summary),false);}
+            case "notification.show", "agent.print" -> {if(!text.isBlank())add("notice",bounded(text),false);}
             case "session.title" -> title=p.optString("title",title);
             case "session.info" -> {model=p.optString("model",model);title=p.optString("title",title);}
             case "request.cancel", "approval.cancelled" -> { String requestId=p.optString("id",p.optString("request_id"));requests.remove(requestId);requests.remove("legacy:"+requestId); status=requests.isEmpty()?(busy?"Working…":"Up to date"):"Needs you"; }
@@ -99,6 +105,8 @@ public final class NativeChat {
         }
         if(!requests.isEmpty())status="Needs you";
     }
+    private static String bounded(String text){return text.length()>4000?text.substring(0,4000)+"\n… Open Workspace for the full result.":text;}
+    private void plan(JSONArray todos){if(todos==null)return;StringBuilder text=new StringBuilder();for(int i=0;i<Math.min(todos.length(),50);i++){JSONObject task=todos.optJSONObject(i);if(task==null)continue;String content=task.optString("content",task.optString("text",task.optString("title")));if(content.isBlank())continue;text.append(task.optString("status").equals("completed")?"✓ ":task.optString("status").equals("in_progress")?"◉ ":"○ ").append(content).append('\n');}if(text.length()==0)return;for(Row row:rows)if(row.role.equals("plan")){row.text=bounded(text.toString());return;}add("plan",bounded(text.toString()),false);}
     private String toolLabel(JSONObject payload){
         JSONArray labels=payload.optJSONArray("labels");if(labels!=null&&labels.length()>0){JSONObject label=labels.optJSONObject(0);if(label!=null&&!label.optString("text").isBlank())return clip(label.optString("text"));}
         String name=payload.optString("name","").toLowerCase(Locale.ROOT);

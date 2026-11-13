@@ -1,20 +1,11 @@
-# Candidate 1 includes the cached-completion badge regression fix.
-name: Build and publish beta candidate
+name: Build and publish signed beta
 on:
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/release.yml
-      - scripts/prepare-candidate.py
-      - scripts/package-candidate.sh
-      - scripts/prepare-website.py
-      - docs/releases/0.3.0-beta.1.md
   workflow_dispatch:
 permissions:
   contents: write
 concurrency:
-  group: release-v0.3.0-beta.1
-  cancel-in-progress: true
+  group: signed-beta-release
+  cancel-in-progress: false
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -22,48 +13,33 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      RELEASE_TAG: v0.3.0-beta.1
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-      - name: Keep a published version unchanged
-        id: existing
-        run: |
-          if gh release view "$RELEASE_TAG" --json isDraft > "$RUNNER_TEMP/release.json"; then
-            python3 -c 'import json,sys; assert not json.load(open(sys.argv[1]))["isDraft"], "An incomplete draft already exists. Inspect it before retrying."' "$RUNNER_TEMP/release.json"
-            echo 'published=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'published=false' >> "$GITHUB_OUTPUT"
-          fi
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
-        if: steps.existing.outputs.published != 'true'
         with:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
-        if: steps.existing.outputs.published != 'true'
         with:
           packages: platform-tools
           log-accepted-android-sdk-licenses: false
       - uses: gradle/actions/setup-gradle@4c125117fe7c5aed11272ec4213f602f012f89f2 # v5
-        if: steps.existing.outputs.published != 'true'
-      - name: Install Android SDK
-        if: steps.existing.outputs.published != 'true'
-        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
-      - name: Test, lint and build both apps
-        if: steps.existing.outputs.published != 'true'
-        run: ./gradlew :core:test :phone:testDebugUnitTest :wear:testDebugUnitTest :phone:lintDebug :wear:lintDebug :phone:assembleDebug :wear:assembleDebug --console=plain
-      - name: Verify signatures and package downloads
-        if: steps.existing.outputs.published != 'true'
-        run: ./scripts/package-candidate.sh
-      - name: Upload all assets before publishing
-        if: steps.existing.outputs.published != 'true'
+      - run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Build with the existing private beta key
+        env:
+          KEYSTORE_B64: ${{ secrets.MURMUR_KEYSTORE_B64 }}
+          MURMUR_STORE_PASSWORD: ${{ secrets.MURMUR_STORE_PASSWORD }}
+          MURMUR_KEY_PASSWORD: ${{ secrets.MURMUR_KEY_PASSWORD }}
+          MURMUR_KEY_ALIAS: ${{ secrets.MURMUR_KEY_ALIAS }}
         run: |
-          gh release create "$RELEASE_TAG" artifacts/candidate-0.3.0-beta.1/* \
-            --target "$GITHUB_SHA" --draft --prerelease \
-            --title 'Murmur Companion 0.3.0 beta candidate 1' \
-            --notes-file docs/releases/0.3.0-beta.1.md
-          gh release edit "$RELEASE_TAG" --draft=false
-      - name: Release link
+          test -n "$KEYSTORE_B64" || { echo 'Restore the pinned beta key through Actions secrets. A new signing key will not be generated.'; exit 1; }
+          export MURMUR_KEYSTORE="$RUNNER_TEMP/beta.jks"
+          trap 'rm -f "$MURMUR_KEYSTORE"' EXIT
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$MURMUR_KEYSTORE"
+          ./gradlew :core:test :phone:testDebugUnitTest :wear:testDebugUnitTest :phone:lintDebug :wear:lintDebug :phone:assembleDebug :wear:assembleDebug :phone:assembleRelease :wear:assembleRelease --console=plain
+          python3 scripts/prepare-beta.py
+      - name: Publish both install and debug pairs
         run: |
-          echo '## Downloads' >> "$GITHUB_STEP_SUMMARY"
-          gh release view "$RELEASE_TAG" --json url --jq .url >> "$GITHUB_STEP_SUMMARY"
+          version=$(python3 -c 'import re; print(re.search(r"versionName = \"([^\"]+)\"",open("phone/build.gradle.kts").read())[1])')
+          gh release create "v$version" "artifacts/beta-$version/"* --target "$GITHUB_SHA" --draft --prerelease --title "Murmur Companion $version" --notes-file "docs/releases/$version.md"
+          gh release edit "v$version" --draft=false

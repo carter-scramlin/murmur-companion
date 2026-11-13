@@ -12,7 +12,13 @@ import java.util.regex.*;
 
 /** Lightweight Android widgets, vector drawing and native text spans. */
 final class NativeViews {
-    static final int PAPER=0xfffaf8f3, CARD=0xffffffff, INK=0xff28212f, MUTED=0xff79717f, PURPLE=0xff7954bd, SOFT=0xffeee8f6, LINE=0xffe9e4ed, RED=0xffa83e48;
+    static int PAPER=0xfffaf8f3, CARD=0xffffffff, INK=0xff28212f, MUTED=0xff79717f, PURPLE=0xff7954bd, SOFT=0xffeee8f6, LINE=0xffe9e4ed, RED=0xffa83e48;
+    static boolean dark;
+    static void palette(Context context){
+        String preference=context.getSharedPreferences("connection",0).getString("theme","system");
+        dark=preference.equals("dark")||preference.equals("system")&&(context.getResources().getConfiguration().uiMode&android.content.res.Configuration.UI_MODE_NIGHT_MASK)==android.content.res.Configuration.UI_MODE_NIGHT_YES;
+        PAPER=dark?0xff17151c:0xfffaf8f3;CARD=dark?0xff24212c:0xffffffff;INK=dark?0xfff3edf8:0xff28212f;MUTED=dark?0xffb4aabb:0xff79717f;PURPLE=dark?0xffb296ef:0xff7954bd;SOFT=dark?0xff31283e:0xffeee8f6;LINE=dark?0xff43384d:0xffe9e4ed;RED=dark?0xffffa3aa:0xffa83e48;
+    }
     static int dp(Context c,float n){return (int)(n*c.getResources().getDisplayMetrics().density+.5f);}
     static GradientDrawable shape(Context c,int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(c,radius));return d;}
     static RippleDrawable ripple(Context c,int color,int radius){return new RippleDrawable(ColorStateList.valueOf(0x227954bd),shape(c,color,radius),shape(c,Color.WHITE,radius));}
@@ -20,7 +26,7 @@ final class NativeViews {
     static LinearLayout column(Context c){LinearLayout l=new LinearLayout(c);l.setOrientation(LinearLayout.VERTICAL);return l;}
     static LinearLayout row(Context c){LinearLayout l=new LinearLayout(c);l.setGravity(Gravity.CENTER_VERTICAL);return l;}
     static void pad(View v,int h,int top,int bottom){v.setPadding(dp(v.getContext(),h),dp(v.getContext(),top),dp(v.getContext(),h),dp(v.getContext(),bottom));}
-    static Button button(Context c,String title,boolean primary,Runnable click){Button b=new Button(c);b.setText(title);b.setAllCaps(false);b.setTextSize(15);b.setTextColor(primary?Color.WHITE:INK);b.setBackground(ripple(c,primary?PURPLE:SOFT,18));b.setMinHeight(dp(c,52));b.setOnClickListener(v->click.run());return b;}
+    static Button button(Context c,String title,boolean primary,Runnable click){Button b=new Button(c);b.setText(title);b.setAllCaps(false);b.setTextSize(15);b.setTextColor(primary?(dark?0xff21172f:Color.WHITE):INK);b.setBackground(ripple(c,primary?PURPLE:SOFT,18));b.setMinHeight(dp(c,52));b.setOnClickListener(v->click.run());return b;}
     static View icon(Context c,String icon,String description,Runnable action){Glyph v=new Glyph(c,icon);v.setContentDescription(description);v.setBackground(ripple(c,Color.TRANSPARENT,24));v.setFocusable(true);v.setOnClickListener(w->action.run());v.setLayoutParams(new LinearLayout.LayoutParams(dp(c,48),dp(c,48)));return v;}
     static CharSequence markdown(String raw){
         // Keep text selectable and linkable without HTML or a browser renderer.
@@ -54,8 +60,8 @@ final class NativeViews {
             switch(name){
                 case "back" -> {path.moveTo(15,5);path.lineTo(8,12);path.lineTo(15,19);}
                 case "plus" -> {path.moveTo(12,5);path.lineTo(12,19);path.moveTo(5,12);path.lineTo(19,12);}
-                case "send" -> {p.setColor(Color.WHITE);path.moveTo(12,18);path.lineTo(12,6);path.moveTo(6,12);path.lineTo(12,6);path.lineTo(18,12);}
-                case "stop" -> {p.setColor(Color.WHITE);canvas.drawRoundRect(6,6,18,18,3,3,p);}
+                case "send" -> {p.setColor(dark?0xff21172f:Color.WHITE);path.moveTo(12,18);path.lineTo(12,6);path.moveTo(6,12);path.lineTo(12,6);path.lineTo(18,12);}
+                case "stop" -> {p.setColor(dark?0xff21172f:Color.WHITE);canvas.drawRoundRect(6,6,18,18,3,3,p);}
                 case "more" -> {p.setStyle(Paint.Style.FILL);for(int i=0;i<3;i++)canvas.drawCircle(6+i*6,12,1.5f,p);}
                 case "search" -> {canvas.drawCircle(10,10,6,p);path.moveTo(15,15);path.lineTo(20,20);}
                 case "chats" -> {canvas.drawRoundRect(4,4,20,17,4,4,p);path.moveTo(9,17);path.lineTo(5,21);path.lineTo(5,16);}

@@ -23,16 +23,40 @@ public final class MurmurApi implements AutoCloseable {
         return new Request.Builder().url(url).header("Origin", endpoint.origin).header("Cookie", cookies);
     }
     public static final class AuthRequired extends IOException { public AuthRequired(String message){super(message);} }
-    public JSONObject get(String path) throws Exception {
-        if (!path.startsWith("/") || path.startsWith("//")) throw new IOException("Invalid server path");
-        try (Response response = client.newCall(request(endpoint.origin + path).build()).execute()) {
-            if (response.code() == 401 || response.code() == 403 || response.isRedirect()) throw new AuthRequired("Sign in to Murmur in the workspace, then return to the native app.");
-            if (!response.isSuccessful() || response.body() == null) throw new IOException("Murmur is unavailable (" + response.code() + "). Check Tailscale on your phone.");
-            if (response.body().contentLength() > 1024 * 1024) throw new IOException("Server response is too large.");
-            String text = response.body().source().readUtf8( Math.min(1024 * 1024, response.body().source().request(1024 * 1024) ? 1024 * 1024 : response.body().source().buffer().size()));
-            try { return new JSONObject(text); }
-            catch (JSONException ex) { throw new AuthRequired("Sign in to Murmur in the workspace, then return to the native app."); }
+    private Request.Builder path(String path) throws IOException {
+        if (!path.startsWith("/") || path.startsWith("//") || path.contains("#") || path.contains("\\")) throw new IOException("Invalid server path");
+        return request(endpoint.origin + path);
+    }
+    private JSONObject json(Response response) throws Exception {
+        if (response.code() == 401 || response.code() == 403 || response.isRedirect()) throw new AuthRequired("Sign in to your Murmur to continue.");
+        if (response.body() == null) throw new IOException("Murmur returned an empty response.");
+        if (response.body().contentLength() > 2 * 1024 * 1024) throw new IOException("Server response is too large.");
+        okio.BufferedSource source=response.body().source();
+        if(source.request(2 * 1024 * 1024 + 1L))throw new IOException("Server response is too large.");
+        String text=source.readUtf8();JSONObject result;
+        try { result=text.isEmpty()?new JSONObject():new JSONObject(text); }
+        catch(JSONException ex){throw new AuthRequired("Murmur returned a sign-in page. Check the server address or use Workspace to sign in to Umbrel.");}
+        if(!response.isSuccessful())throw new IOException(result.optString("error",result.optString("detail","Murmur returned "+response.code())));
+        return result;
+    }
+    public JSONObject get(String path) throws Exception { return http("GET",path,null); }
+    public JSONObject http(String method,String path,JSONObject body) throws Exception {
+        RequestBody data=body==null?null:RequestBody.create(body.toString(),MediaType.get("application/json; charset=utf-8"));
+        try(Response response=client.newCall(path(path).method(method,data).build()).execute()){return json(response);}
+    }
+    /** Returns Set-Cookie headers only. The caller stores them in Android's origin-scoped cookie store. */
+    public java.util.List<String> login(String password) throws Exception {
+        RequestBody body=RequestBody.create(new JSONObject().put("password",password).toString(),MediaType.get("application/json; charset=utf-8"));
+        try(Response response=client.newCall(path("/murmur/login").post(body).build()).execute()){
+            if(response.code()==401)throw new IOException("That Murmur password didn't work.");
+            json(response);return response.headers("Set-Cookie");
         }
+    }
+    public JSONObject upload(String home,String destination,String filename,java.io.File file,String mime) throws Exception {
+        RequestBody body=new MultipartBody.Builder().setType(MultipartBody.FORM)
+                .addFormDataPart("path",destination).addFormDataPart("overwrite","false")
+                .addFormDataPart("file",filename,RequestBody.create(file,MediaType.parse(mime==null?"application/octet-stream":mime))).build();
+        try(Response response=client.newBuilder().callTimeout(3,TimeUnit.MINUTES).build().newCall(path("/hermes/api/files/upload-stream?hermes="+Endpoint.encode(home)).post(body).build()).execute()){return json(response);}
     }
     public interface Listener {
         default void onEvent(JSONObject event) { }
@@ -73,13 +97,13 @@ public final class MurmurApi implements AutoCloseable {
                         else future.complete(frame.optJSONObject("result") == null ? new JSONObject() : frame.getJSONObject("result"));
                     } catch (Exception ignored) { /* unrelated events do not settle an RPC */ }
                 }
-                @Override public void onFailure(WebSocket ws, Throwable error, Response response) { fail(new IOException("Can't reach Murmur. Check your phone's sign-in and Tailscale connection.")); }
+                @Override public void onFailure(WebSocket ws, Throwable error, Response response) { fail(response!=null&&(response.code()==401||response.code()==403||response.isRedirect())?new AuthRequired("Sign in to your Murmur to continue."):new IOException("Can't reach Murmur. Check Tailscale and your server address.")); }
                 @Override public void onClosing(WebSocket ws, int code, String reason) { ws.close(code, reason); }
                 @Override public void onClosed(WebSocket ws, int code, String reason) { sockets.remove(ws); fail(new IOException("Murmur disconnected. Open it on your phone.")); }
             });
             sockets.add(socket);
             try { opened.get(10, TimeUnit.SECONDS); }
-            catch (Exception ex) { socket.cancel(); throw new IOException("Can't connect. Open Murmur on your phone and check Tailscale."); }
+            catch (Exception ex) { socket.cancel(); if(ex.getCause() instanceof AuthRequired auth)throw auth;throw new IOException("Can't connect. Check Tailscale and your Murmur server."); }
         }
         private void fail(Throwable error) {
             boolean wasAlive = alive; alive = false;

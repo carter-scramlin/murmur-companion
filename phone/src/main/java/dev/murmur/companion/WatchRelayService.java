@@ -38,7 +38,7 @@ public final class WatchRelayService extends WearableListenerService {
                             .setContentText("Tap to continue in your native Watch chat.").setVisibility(Notification.VISIBILITY_PRIVATE).setContentIntent(open).setAutoCancel(true).build());
                     response.put("status", "Tap the Murmur reminder on your phone.");
                 } else {
-                    if (!action.equals("agents") && !action.equals("read") && !action.equals("send")) throw new Exception("Unsupported watch action.");
+                    if (!action.equals("agents") && !action.equals("read") && !action.equals("send") && !action.equals("stop")) throw new Exception("Unsupported watch action.");
                     boolean send = action.equals("send");
                     SharedPreferences receipts = getSharedPreferences("watch_receipts", MODE_PRIVATE);
                     String receiptKey = endpoint.origin + ":" + id;

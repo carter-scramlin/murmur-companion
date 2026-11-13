@@ -94,6 +94,13 @@ public class NativePhoneTest {
             assertFalse(chat.busy);assertNotNull(findDescription(decor,"Send message"));
         }finally{context.getSharedPreferences("connection",0).edit().clear().commit();}
     }
+    @Test public void darkModeUsesNativePaletteAndOffersAppearanceAndOfflineControls()throws Exception{
+        Context context=RuntimeEnvironment.getApplication();context.getSharedPreferences("connection",0).edit().putString("theme","dark").commit();
+        try(ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).setup().visible()){
+            MainActivity activity=controller.get();assertTrue(NativeViews.dark);activity.store.tab="settings";activity.showNative();settle();View decor=activity.getWindow().getDecorView();
+            assertNotNull(findText(decor,"Appearance"));assertNotNull(findText(decor,"Save recent chats for offline reading"));assertEquals(0,countWebViews(decor));render(decor,"phone-native-dark.png");
+        }finally{context.getSharedPreferences("connection",0).edit().clear().commit();}
+    }
     private static View findBuddy(View view){if(view instanceof dev.murmur.companion.ui.BuddyView)return view;if(view instanceof ViewGroup g)for(int i=0;i<g.getChildCount();i++){View found=findBuddy(g.getChildAt(i));if(found!=null)return found;}return null;}
     interface Check{boolean ready();}
     private static void await(Check check)throws Exception{long end=System.currentTimeMillis()+12000;while(System.currentTimeMillis()<end){shadowOf(Looper.getMainLooper()).idle();if(check.ready())return;Thread.sleep(15);}fail("Native UI did not reach the expected state");}

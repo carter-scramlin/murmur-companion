@@ -1,6 +1,7 @@
 name: Android & Wear OS
 on:
   push:
+    branches-ignore: ['codex/publish-*']
   pull_request:
   workflow_dispatch:
 permissions:

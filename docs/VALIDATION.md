@@ -1,57 +1,38 @@
-# Validation record
+# Validation record — 0.3.0-beta.2
 
-Beta candidate 0.3.0-beta.1, prepared November 13, 2026. These results describe this build, not all future versions of Murmur, Android or Wear OS.
+Prepared November 13, 2026. These checks describe this source and the matching install/debug APKs. They do not certify a physical phone, Pixel Watch or every Murmur server version.
 
-## Passed locally
+## Automated checks
 
-```bash
-./gradlew :core:test :phone:testDebugUnitTest :wear:testDebugUnitTest :phone:assembleDebug :wear:assembleDebug :phone:lintDebug :wear:lintDebug
-```
+`./scripts/package-beta.sh` runs core, phone and watch unit tests, Android lint, optimized release builds and debuggable builds, then verifies/package-signs the four outputs with the existing private beta key.
 
-- **21 core JVM tests:** agent hue metadata/fallbacks, typed activity transitions, waiting-state retention, completed in-flight snapshots/history bounds, plus streaming events and explicit server-request answers, stream offset/sequence deduplication, resumed in-flight replies, gap detection, request restoration/cancellation, plus origin parsing and matching, private HTTP opt-in, invalid addresses, authenticated request headers, no cookie forwarding across HTTP redirects, login HTML refusal, read without chat creation, exact watch-chat create/send sequence, stored/runtime session IDs, no send while approval is waiting, bounded transcripts, out-of-order RPC response matching, and multi-Hermes agent identity with unavailable homes skipped. Some tests cover several assertions.
-- **8 Android runtime tests using Robolectric, Android API 35:** slow-resume Back behavior, cached-chat completion, read-only reconnect without repeating a prompt, character hue/working card/Stop layout, plus native phone HTTP/WebSocket fixture flow without a WebView, one prompt submission, native reply streaming, draft survival across Activity recreation, native approval details/confirmation without automatic permission; phone onboarding creates successfully and rejects a credential-bearing URL; watch round-screen chat/review layouts render and reviewing a dictated draft does not initiate a send. Draft state is preserved for restoration. These are JVM Android runtime tests, not physical-device tests.
-- **Both debug APKs compile; optimized release APKs also build with R8/resource shrinking and are verified non-debuggable.** Their package IDs match. APK signatures and certificates are checked separately before packaging the local pair.
-- **Android lint:** zero errors. Remaining warnings concern an intentionally pinned target/dependency version and English-only native strings. Native strings are not localized in this preview.
-- **Visual review:** native phone onboarding, conversation list, transcript/composer, working character/activity card and approval cards rendered at 1080 × 2400 with 411 × 914 dp qualifiers; watch agent/review screens rendered at 384 × 384 with 192 dp round-display qualifiers. See the images below. No emulator or physical-device screenshot is represented by these renders.
+- **37 tests:** 25 core JVM, 11 phone Android runtime, one watch Android runtime. Android runtime fixtures use API 35 plus API 28 for the offline cache.
+- Coverage includes origin/cookie isolation and refused redirects; native password login; multipart file upload to an explicit home; archived-chat revision fencing; attachment staging followed by exactly one prompt; streaming replay/offset/sequence handling; native plans/helper progress; watch read/create/send/stop contracts; no auto-send while waiting; native phone UI without a WebView; read-only reconnect; navigation/rotation/drafts; approval details and explicit consent; native character/activity/Stop; dark palette/settings; origin-isolated offline cache restoration without runtime IDs or pending private requests; watch review layouts.
+- **Android lint:** zero errors. Warnings include pinned dependencies/target, English-only strings and accessibility/style suggestions. Native translations are not implemented.
+- **Four APKs verified:** application ID `dev.murmur.companion.beta`, versionCode 4, versionName `0.3.0-beta.2`; matching pinned certificate; phone/watch hardware requirements; correct debugging flags. Install APKs are non-debuggable and use R8/resource shrinking. Debug APKs enable Android debugging and also shrink resources/code.
+- **Publishing:** the GitHub publication workflow verifies every checksum and certificate, checks that staged files are the only differences from the tested source commit, and requires successful CI on that source commit before publishing. Private signing material never enters the publication branch or release.
 
-The Android emulator on this host crashed in its native QEMU process before Android boot completed, with and without Vulkan enabled. This prevented an emulator smoke test; it is not evidence that the app launched on a device.
+The phone/watch layout renders use local fixture data in Robolectric. Their pixels come from Android views, not a connected personal server or a physical device. The host's earlier emulator attempt crashed before boot; no emulator installation result is claimed.
 
-## Upstream inspected
+## Inspected upstream contracts
 
-- Repository: [getumbrel/murmur](https://github.com/getumbrel/murmur)
-- Commits: `27253d221302af4c2b76b95f993428d698322519` (original baseline) and `2791c7e5234bae4ca0ad050c404b7b3913f687ab` (native RPC/events contract checked November 13).
-- Inspected contracts: Murmur connection routing, session access cookies, authenticated Hermes proxy, generated JSON-RPC types, agent naming metadata and chat create/resume/submit calls.
-- Umbrel deployment boundary: [Murmur app proxy configuration](https://github.com/getumbrel/umbrel-apps/blob/master/murmur/docker-compose.yml).
+[getumbrel/murmur](https://github.com/getumbrel/murmur), revisions `27253d221302af4c2b76b95f993428d698322519` and `2791c7e5234bae4ca0ad050c404b7b3913f687ab`: session access/password cookies, authenticated Hermes routing, session list/resume/submit/interrupt/delete, stored-message paging, mutation snapshots, file upload/attach, image attach/detach, model/config controls, profiles, renderer requests and events. Local fixtures follow these contracts; they are not live-server certification.
 
-The contract tests use local fixtures consistent with that inspected source. They are **not** a live-server compatibility certification. Upstream modifications can affect the native phone and watch clients.
+## Device validation still needed
 
-## Beta gates
+- Install alongside the old preview on the user's phone; pair with the matching beta on Pixel Watch. Test switching between install/debug variants with settings retained.
+- Native password sign-in and actual Umbrel gateway sign-in; multiple Hermes homes and current live API behavior.
+- Real photo/file delivery, model changes and agent personality editing on test agents.
+- Wi-Fi/cellular Tailscale transitions, denied access, expired sign-in, server restarts and uncertain sends.
+- Foreground reply following with screen off, Android power restrictions, network loss and notification delivery/mirroring. It is a visible 30-minute activity monitor, not general Web Push.
+- Watch Data Layer wakeup while the phone is backgrounded, nearby Bluetooth and remote connectivity, watch Stop and exact phone handoff.
+- TalkBack, large fonts, reduced motion, dictation, system text-to-speech, crown input and both watch sizes.
+- Groups, routines, memories, integrations and interactive browser tools through Workspace. OAuth provider restrictions, blob exports, general Web Push, widgets, watch tiles/complications and standalone watch networking remain unimplemented client integrations.
 
-See [BETA.md](BETA.md). The public candidate uses a temporary preview key; a permanent backed-up distribution key and the signed-build secrets are still required before a broad beta. Desktop signing setup could not be completed because browser control was unavailable in the locked desktop session. Test-signed release validation APKs are not distribution artifacts.
+## Native runtime renders
 
-## Still required before a public stable release
+<p><img src="images/phone-native-working.png" width="230" alt="Native character, working state, elapsed time, Stop and attachment control" /> <img src="images/phone-native-dark.png" width="230" alt="Native dark appearance and settings" /></p>
 
-- [ ] Install the matching signed pair on the user's phone and Pixel Watch.
-- [ ] Sign in through the actual Umbrel app proxy and standalone Murmur password flow.
-- [ ] Verify Data Layer service wakeup while the phone app is in the background.
-- [ ] Test Bluetooth nearby, Wi-Fi/remote Data Layer availability, phone screen off and phone unreachable.
-- [ ] Connect with a full Tailscale MagicDNS HTTPS name; switch between home Wi-Fi and cellular.
-- [ ] Check tailnet access denial, expired auth and server restarts.
-- [ ] List agents from multiple Hermes connections; check unavailable homes and naming.
-- [ ] Send from watch, confirm the Watch chat on the web, read a streamed reply and test a waiting approval.
-- [ ] Test system dictation, keyboard, crown input, TalkBack, larger fonts and both Pixel Watch sizes.
-- [ ] Test ambiguous send delivery and process death without duplicate automatic submission.
-- [ ] Validate native phone streaming, stop, create/rename, approval/question cards, drafts, screen rotation, background return and exact Watch-chat handoff on real hardware.
-- [ ] Test workspace images/files, Save as, browser popup sign-in, live widgets and supported voice/read-aloud flows.
-- [ ] Close the documented Web Push, embedded OAuth, blob-download and media parity gaps before claiming full desktop/browser feature parity.
-- [ ] Validate a stable release signing key and upgrades from an older installed version.
+<p><img src="images/phone-native-chats.png" width="230" alt="Native conversation list" /> <img src="images/phone-native-chat.png" width="230" alt="Native streamed chat" /> <img src="images/phone-native-approval.png" width="230" alt="Native permission card" /></p>
 
-## Native layout renders
-
-These are actual Android views rendered by Robolectric using fixture data. They demonstrate the local layouts, not a connected personal Murmur or successful watch pairing.
-
-<p><img src="images/phone-native-working.png" width="230" alt="Native Buddy working state with human-readable activity and elapsed time" /></p>
-
-<p><img src="images/phone-native-chats.png" width="230" alt="Native Android conversation list render" /> <img src="images/phone-native-chat.png" width="230" alt="Native Android transcript and composer render" /> <img src="images/phone-native-approval.png" width="230" alt="Native Android approval card render" /></p>
-
-<p><img src="images/phone-onboarding.png" width="270" alt="Native Android connection screen render" /> <img src="images/watch-agent.png" width="192" alt="Native round-screen watch agent render with fixture data" /> <img src="images/watch-review.png" width="192" alt="Native watch message review render with fixture data" /></p>
+<p><img src="images/watch-agent.png" width="192" alt="Round watch chat fixture" /> <img src="images/watch-review.png" width="192" alt="Watch draft review fixture" /></p>

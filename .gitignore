@@ -11,3 +11,5 @@ artifacts/*
 
 website/downloads/*
 !website/downloads/.gitkeep
+
+staged-release/

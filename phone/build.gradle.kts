@@ -4,11 +4,11 @@ android {
     compileSdk = 36
     sourceSets.getByName("main").java.srcDir("../shared-ui/src/main/java")
     defaultConfig {
-        applicationId = "dev.murmur.companion"
+        applicationId = "dev.murmur.companion.beta"
         minSdk = 28
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.3.0-beta.1"
+        versionCode = 4
+        versionName = "0.3.0-beta.2"
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     buildFeatures { buildConfig = true }
@@ -24,7 +24,13 @@ android {
             }
         }
     }
-    buildTypes { release {
+    buildTypes {
+        getByName("debug") {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            if (System.getenv("MURMUR_KEYSTORE") != null) signingConfig = signingConfigs.getByName("distribution") }
+        release {
         signingConfig = signingConfigs.getByName("distribution")
         isMinifyEnabled = true
         isShrinkResources = true

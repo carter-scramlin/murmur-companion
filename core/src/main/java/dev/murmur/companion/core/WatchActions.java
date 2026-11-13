@@ -9,7 +9,7 @@ public final class WatchActions {
     public static JSONObject execute(MurmurApi api, JSONObject request) throws Exception {
         String action = request.getString("action");
         if (action.equals("agents")) return agents(api);
-        if (!action.equals("read") && !action.equals("send")) throw new IOException("Unsupported watch action.");
+        if (!action.equals("read") && !action.equals("send") && !action.equals("stop")) throw new IOException("Unsupported watch action.");
         String hermes = request.getString("hermes");
         String profile = request.getString("profile");
         if (!hermes.matches("[a-zA-Z0-9_-]{1,128}") || !profile.matches("[a-z0-9][a-z0-9_-]{0,63}")) throw new IOException("Choose an agent again.");
@@ -25,19 +25,20 @@ public final class WatchActions {
             }
             JSONObject state;
             if (stored == null) {
-                if (action.equals("read")) return new JSONObject().put("messages", new JSONArray()).put("status", "Ready when you are");
+                if (!action.equals("send")) return new JSONObject().put("messages", new JSONArray()).put("status", "Ready when you are");
                 state = rpc.call("session.create", params.put("title", TITLE).put("source", "desktop").put("close_on_disconnect", false));
             } else state = rpc.call("session.resume", params.put("session_id", stored).put("source", "desktop").put("close_on_disconnect", false));
             String runtime = state.getString("session_id");
             boolean waiting = (state.optJSONArray("open_requests") != null && state.optJSONArray("open_requests").length() > 0)
                     || state.optJSONObject("pending_approval") != null || state.optJSONObject("pending_connection") != null;
-            boolean busy = state.optBoolean("running") || "working".equals(state.optString("status")) || "starting".equals(state.optString("status"));
+            boolean busy = state.optBoolean("running") || "working".equals(state.optString("status")) || "starting".equals(state.optString("status")) || "streaming".equals(state.optString("status")) || "resuming".equals(state.optString("status"));
             if (action.equals("send")) {
                 if (waiting) throw new IOException("Your agent needs you. Open this chat on your phone.");
                 if (busy) throw new IOException("Your agent is still working. Refresh before sending another message.");
                 JSONObject result = rpc.call("prompt.submit", new JSONObject().put("session_id", runtime).put("profile", profile).put("text", text));
                 return new JSONObject().put("sent", true).put("status", "queued".equals(result.optString("status")) ? "Queued" : "Working…");
             }
+            if(action.equals("stop")){rpc.call("session.interrupt",new JSONObject().put("session_id",runtime).put("profile",profile));return new JSONObject().put("status","Stopping…").put("busy",true).put("messages",new JSONArray());}
             JSONArray rows = state.optJSONArray("messages");
             JSONArray messages = new JSONArray();
             if (rows != null) for (int i = Math.max(0, rows.length() - 30); i < rows.length(); i++) {
@@ -51,7 +52,7 @@ public final class WatchActions {
             // Bound the Data Layer response while retaining the most recent conversation.
             while (messages.length() > 8) messages.remove(0);
             JSONObject inflight = state.optJSONObject("inflight");
-            if (inflight != null && !inflight.optString("assistant").trim().isEmpty()) messages.put(new JSONObject().put("role", "assistant").put("text", clip(inflight.optString("assistant"), 2400)));
+            if (inflight != null && !inflight.optString("assistant").trim().isEmpty() && (messages.length()==0 || !inflight.optString("assistant").equals(messages.optJSONObject(messages.length()-1).optString("text")))) messages.put(new JSONObject().put("role", "assistant").put("text", clip(inflight.optString("assistant"), 2400)));
             return new JSONObject().put("messages", messages).put("status", waiting ? "Needs you · Open on phone" : busy ? "Working…" : "Up to date").put("waiting", waiting).put("busy", busy);
         }
     }

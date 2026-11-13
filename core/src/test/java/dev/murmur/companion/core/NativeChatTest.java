@@ -64,5 +64,12 @@ public class NativeChatTest {
         for(int i=0;i<600;i++)c.add("user","message "+i,false);
         assertEquals(500,c.rows.size());assertEquals("message 599",c.rows.get(499).text);
     }
+    @Test public void plansAndHelpersUpdateNativeActivityWithoutDuplicatingPlanRows()throws Exception{
+        NativeChat c=chat();c.event(event("message.start",1,new JSONObject()));JSONArray todos=new JSONArray().put(new JSONObject().put("content","Check the result").put("status","in_progress"));
+        c.event(event("todo.updated",2,new JSONObject().put("todos",todos)));assertTrue(c.rows.get(0).text.contains("Check the result"));
+        todos.getJSONObject(0).put("status","completed");c.event(event("todo.updated",3,new JSONObject().put("todos",todos)));assertEquals(1,c.rows.size());assertTrue(c.rows.get(0).text.startsWith("✓"));
+        c.event(event("tool.start",4,new JSONObject().put("name","delegate")));c.event(event("subagent.start",5,new JSONObject().put("goal","Research")));assertTrue(c.activityLabel().contains("Research"));
+        c.event(event("subagent.complete",6,new JSONObject().put("summary","Found two sources")));assertEquals("tool",c.rows.get(1).role);assertTrue(c.rows.get(1).text.contains("Found two sources"));
+    }
 
 }

@@ -89,6 +89,7 @@ public final class WatchActivity extends androidx.activity.ComponentActivity imp
         busy = response.optBoolean("busy") || response.optBoolean("waiting");
         JSONArray messages = response.optJSONArray("messages");
         if (!busy && !uncertain) chip("Say something", true, this::speak);
+        if(response.optBoolean("busy")&&!response.optBoolean("waiting"))chip("Stop reply",false,()->request("stop",""));
         if (response.optBoolean("waiting")) chip("Continue on phone", true, () -> request("open", ""));
         if (messages != null && messages.length() > 0) chip("Read reply", false, this::showReader);
         if (!busy && !uncertain) chip("Type a message", false, this::type);

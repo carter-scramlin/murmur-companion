@@ -1,49 +1,26 @@
-# Beta candidate: 0.3.0-beta.1
+# Beta 0.3.0-beta.2
 
-This candidate is ready for limited testing of the native character and conversation experience. It is **not yet a signed, validated broad beta channel**.
+Download the **install** APK pair from [GitHub Releases](https://github.com/carter-scramlin/murmur-companion/releases/tag/v0.3.0-beta.2). Debug APKs are also provided for troubleshooting. All four share the pinned persistent beta certificate and the application ID `dev.murmur.companion.beta`. The launcher name is **Murmur Beta**.
 
-## What is ready
+The new ID avoids earlier preview signing conflicts and allows both apps to coexist. Sign in again in the new beta. Your server chats are retained; cookies/drafts in the old app remain private to it. Install the matching beta watch APK too. See [INSTALL.md](INSTALL.md).
 
-- Native Murmur Buddy characters on the phone and watch. The phone uses the agent's hue metadata, deterministic shape, expressions and gentle motion while working.
-- Explicit Thinking / Working / Replying / Needs you / Finished states. A persistent activity card shows the current operation, elapsed time and Stop. The status is also written as text, so it does not depend on animation or colour.
-- Reduced-motion preference, respect for Android animation settings and battery saver; watch characters remain static to save power.
-- Bounded read-only reconnects with no automatic prompt resubmission, cached-chat completion updates, cancellable slow navigation, scoped drafts saved after a short debounce and memory bounds.
-- Native Android tests, upstream contract fixtures, lint, APK signature checks and optimized release builds.
-- Feedback template and Settings → Send beta feedback. The report contains app/Android/device versions; it excludes chats, server origin and credentials. Sharing only opens the Android share sheet; you choose where to send it.
+## Signing
 
-## Install the candidate
+The private beta key is retained on the signing host outside the repository. Only its public fingerprint is committed in `signing/beta-certificate.sha256`. The packager refuses to generate a replacement once that fingerprint exists. Keep an encrypted private backup of the key and password; never publish either. CI validation keys and developer debug keys cannot update public release downloads.
 
-Download both **candidate** APKs from the same GitHub Release, or the combined candidate ZIP. They are optimized, non-debuggable release builds signed with the build runner's **temporary preview key**. The `.apk` filename distinguishes them from the earlier debug builds. Install the phone APK normally and install the watch APK with wireless ADB as described in [INSTALL.md](INSTALL.md).
+Publication can use prebuilt signed assets from the signing host: GitHub verifies signatures, manifests, checksums and a successful CI run for the source commit before creating a draft release and publishing all assets together. GitHub Actions signing secrets remain optional until configured with this same existing key. See [RELEASING.md](RELEASING.md).
 
-A change from an earlier preview signing key may require uninstalling **both** old apps first. Uninstall removes local sign-in, preferences and drafts; server chats remain. Keep the matching pair together. A temporary preview key does not support stable upgrades between independently built candidates.
+## Tester pass
 
-## Before a broad beta
+1. Install `phone-install.apk` alongside the old app; check that **Murmur Beta** opens. Install the matching `wear-install.apk` on your paired Pixel Watch.
+2. Connect and use native Murmur password sign-in, or Workspace for an Umbrel gateway. Confirm native agents and history load.
+3. Send a text message, photo and file. Observe Thinking → Working → Replying → Finished, tool summaries, plans and Stop. Confirm the agent received the file contents.
+4. Test an approval, clarification and private-value request. Nothing should be answered automatically; private values must not appear in the read cache.
+5. Test pin/archive/restore/delete on disposable chats, older history pages, model selection and personality editing on a test agent.
+6. Enable offline reading, open a chat, close/reopen the app without network, then reconnect. Verify one prompt submission only. Disable offline reading and verify saved copies are removed.
+7. Check system/dark/light theme, large fonts, reduced motion, dictation, share and read-aloud.
+8. While an agent works, select **Notify when this reply finishes**, turn off the screen, and test completion, a request for input and a Tailscale/network interruption. Stop following from its notification.
+9. Test reviewed watch dictation, reply reading, Stop and phone handoff.
+10. Install the matching debug phone APK over the install APK, then switch back. Check the same certificate and retained local settings.
 
-| Gate | Current status |
-|---|---|
-| Automated tests, lint and optimized builds | Checked in CI; see [validation](VALIDATION.md) |
-| Fixed private release key, backed up securely | Required; configure the signed-build workflow before distributing a stable update channel |
-| GitHub signing secrets | Setup guide prepared; desktop GitHub configuration was unavailable during candidate preparation |
-| Real phone and Pixel Watch installation | Still required |
-| Live Murmur sign-in and API compatibility | Still required |
-| Tailscale Wi-Fi/cellular transitions and phone screen off | Still required |
-| TalkBack, large fonts, reduced motion and both watch sizes | Still required |
-| Update with the same distribution key | Still required |
-
-## Stable signing setup
-
-Follow [RELEASING.md](RELEASING.md) to create and back up a private keystore outside the repository. In this repository's **Settings → Secrets and variables → Actions**, add `MURMUR_KEYSTORE_B64`, `MURMUR_STORE_PASSWORD`, `MURMUR_KEY_ALIAS` and `MURMUR_KEY_PASSWORD`. Never put these values in an issue, commit or release asset.
-
-Run **Build signed beta** from Actions. It builds and verifies the matching optimized release pair, package and checksums as a workflow artifact. It does not silently replace the candidate's APKs or publish a production release. Before publishing a signed beta, choose a new version/versionCode, complete the hardware checks and publish that matching signed pair under its own tag. Preserve that private key for every later beta update.
-
-## Short tester pass
-
-1. Install both candidate APKs, finish phone sign-in, choose an agent, and confirm the character's colour matches Murmur.
-2. Send a short prompt and a tool-using prompt. Check Thinking → Working → Replying → Finished, elapsed time and Stop.
-3. Trigger a safe approval/question; confirm Needs you stays visible and nothing is auto-approved.
-4. Leave a working chat, then return. Turn off networking, reconnect and verify the prompt appears once.
-5. Type a draft, rotate the phone, background it and return. Try reduced motion and larger fonts.
-6. Use the watch's voice review and reply reader. Continue on phone and confirm the correct Watch chat opens.
-7. Report failures using the feedback form without private details.
-
-Advanced groups, models, memories, routines, integrations, attachments and rich tool content still use Full Murmur workspace. See [FEATURES.md](FEATURES.md); complete native desktop feature parity is not claimed.
+Physical phone/Pixel Watch, live Murmur compatibility, battery/background behavior, accessibility and Tailscale cellular/Wi-Fi transitions remain hardware validation gates. Automated tests and runtime renders do not substitute for those checks. The beta retains the advanced workspace features listed in [FEATURES.md](FEATURES.md); full native desktop parity is not claimed.

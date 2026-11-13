@@ -248,6 +248,7 @@ public class WorkspaceActivity extends androidx.activity.ComponentActivity {
         try { startActivity(new Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE)); } catch (ActivityNotFoundException ex) { toast("No app can open that link."); }
     }
     private void forget() {
+        stopService(new Intent(this,ReplyMonitorService.class));OfflineCache.clearAll(this);getSharedPreferences("drafts",MODE_PRIVATE).edit().clear().apply();
         prefs().edit().clear().apply();
         getSharedPreferences("watch_receipts", MODE_PRIVATE).edit().clear().apply();
         if (web != null) { web.clearCache(true); web.clearHistory(); }

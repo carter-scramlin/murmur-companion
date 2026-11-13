@@ -14,10 +14,10 @@ The native API integration was checked against Murmur source revisions `27253d22
 
 ## 2. Download both apps
 
-Open [Releases → v0.3.0-beta.1](https://github.com/carter-scramlin/murmur-companion/releases/tag/v0.3.0-beta.1) and expand **Assets**. Download `murmur-companion-0.3.0-beta.1-candidate.zip` and extract it. It contains:
+Open [Releases → v0.3.0-beta.2](https://github.com/carter-scramlin/murmur-companion/releases/tag/v0.3.0-beta.2) and expand **Assets**. Download `murmur-companion-0.3.0-beta.2-install.zip` and extract it. It contains:
 
-- `murmur-companion-phone-candidate.apk` — install on the phone.
-- `murmur-companion-wear-candidate.apk` — install on the watch.
+- `murmur-companion-phone-install.apk` — install on the phone.
+- `murmur-companion-wear-install.apk` — install on the watch.
 - Full documentation and `SHA256SUMS`.
 
 You can also download the APKs individually from the same release. Keep the pair together because both apps must share the same signing certificate. **Skip the optional source build below** and continue with section 3.
@@ -45,35 +45,39 @@ On Windows, use `gradlew.bat` instead of `./gradlew`. The first build needs inte
 | Phone | `phone/build/outputs/apk/debug/phone-debug.apk` |
 | Watch | `wear/build/outputs/apk/debug/wear-debug.apk` |
 
-The public candidate uses optimized release APKs signed with a temporary preview key. The source-build outputs above are debug APKs for local development. If you are using a signed-beta workflow artifact, substitute `murmur-companion-phone.apk` and `murmur-companion-wear.apk` in the install commands.
+The public **install** pair is optimized and non-debuggable. The **debug** pair enables Android debugging. Both use the same persistent beta signing certificate and application ID (`dev.murmur.companion.beta`), so you can switch between them without a signature conflict. Keep the matching phone/watch pair together.
 
-Both apps must have the same application ID (`dev.murmur.companion`) **and signing certificate**. Building them together on one computer uses the same Android debug key. Download both APKs from the same GitHub Release (or the same CI run if using Actions artifacts); debug keys from different machines/runs can differ.
+This beta appears as **Murmur Beta** and installs alongside previous **Murmur Companion** releases. Earlier releases used temporary keys under `dev.murmur.companion`; Android cannot update one with another certificate. The separate beta ID avoids that conflict without uninstalling the old app. Sign in again in the beta. Server chats remain on Murmur; old local drafts and sign-in remain in the old app until you remove it.
 
-The candidate is suitable for limited testing. Follow [BETA.md](BETA.md) for the tester pass and broad-beta signing/device gates. Debug builds are suitable for development testing. For a stable personal installation across computers or CI runs, use a persistent release signing key as described in [releasing](RELEASING.md).
+Source builds and CI verification artifacts use developer/test keys unless configured with the private beta key. They cannot update public beta APKs. Use public release assets for updates; see [RELEASING.md](RELEASING.md) for maintainers.
 
 ## 3. Install on your phone
 
-**Using the file manager:** transfer `murmur-companion-phone-candidate.apk` to the phone, tap it, and allow that file manager to install unknown apps when Android asks. Install the APK. You can turn that permission off afterward.
+**Using the file manager:** transfer `murmur-companion-phone-install.apk` to the phone, tap it, and allow that file manager to install unknown apps when Android asks. Install the APK. You can turn that permission off afterward.
 
 **Using ADB:** enable Developer options on the phone by tapping Build number seven times in Android Settings → About phone. Turn on USB debugging, connect the phone over USB and accept the computer's debugging prompt. In a terminal with Android Platform Tools on PATH:
 
 ```bash
 adb devices -l
-adb -s PHONE_SERIAL install -r murmur-companion-phone-candidate.apk
+adb -s PHONE_SERIAL install -r murmur-companion-phone-install.apk
 ```
 
 Run commands from the folder containing your downloaded APKs. Replace `PHONE_SERIAL` with the serial shown by `adb devices -l`; do not type the placeholder literally. If you built from source, substitute the corresponding build output path from section 2.
 
 ## 4. Connect Murmur
 
-1. Open **Murmur Companion** on the phone.
+1. Open **Murmur Beta** on the phone.
 2. Enter the root URL that opens Murmur, including `https://` and any port. Recommended: `https://umbrel.your-tailnet.ts.net` from Tailscale Serve.
 3. Tap **Connect to Murmur**. Native agent and conversation lists load directly from your server.
-4. If sign-in is required, tap the sign-in card (or **••• → Connection & sign-in → Sign in / Workspace**). Finish the normal Umbrel/Murmur sign-in, then tap **Native app** at the top to return.
+4. If sign-in is required, tap the sign-in card (or **••• → Connection & sign-in → Sign in**). Enter your Murmur password in the native dialog. For Umbrel gateway sign-in, choose **Workspace**, finish sign-in, then tap **Native app** to return.
 5. Use **Agents** to choose an agent, then open a conversation or tap **+** for a new one. Type or dictate a draft, review it, and tap the send arrow. The native Buddy character and activity card show Thinking / Working / Replying / Needs you, the current operation and elapsed time. Tap Stop to interrupt a running reply. Reduce motion in Settings if you prefer.
 6. Native approval cards show the proposed action; tap the card for details. **Allow once** asks you to confirm the action. Clarification cards open a native form.
-7. **Settings → Full Murmur workspace** keeps groups, models, memory, routines, integrations and rich content available. Sign-in and those advanced features use the explicit web screen.
-8. Use **••• → Connection & sign-in → Reconnect** after a VPN interruption. Reconnect never resends a message. If a send was unconfirmed, inspect the chat before sending again.
+7. Tap **+** in the composer to attach a photo or file. Wait for “attached · Ready to send”, write a message and send. Images are limited to 25 MB and other files to 100 MB. Uploads use the selected agent's folder.
+8. Use **•••** for model/provider selection, thinking level, agent creation/personality editing, pin/archive/restore/delete, sharing shown messages and full history pages. Delete has a confirmation. Long-press a reply for Copy, Read aloud or Share.
+9. **Settings → Appearance** supports system/light/dark. Recent opened chats are saved privately for offline reading by default; turn the offline switch off to delete saved read copies. Reconnect before sending. Drafts are retained separately.
+10. While an agent is working, **••• → Notify when this reply finishes** starts visible monitoring for up to 30 minutes. Allow notifications, then choose the action again if asked. Stop following from the notification. Android power/network restrictions can delay monitoring; connection failures prompt you to check manually. This follows one active conversation and is not general Web Push.
+11. **Settings → Full Murmur workspace** keeps groups, memory, routines, integrations, interactive browser tools and other advanced server features available.
+12. Use **••• → Connection & sign-in → Reconnect** after a VPN interruption. Reconnect never resends a message. If a send was unconfirmed, inspect the chat before sending again.
 
 For private LAN or tailnet HTTP URLs such as `http://100.80.10.20:PORT`, turn on **Allow a private HTTP connection** first. Public HTTP addresses are rejected. HTTPS is needed for web microphone capture and secure-context features. HTTP is not promoted automatically to HTTPS; use the actual reachable address.
 
@@ -99,10 +103,10 @@ Menu wording varies by Wear OS version. Use the watch's Settings search if an it
    ```bash
    adb connect WATCH_IP:CONNECTION_PORT
    adb devices -l
-   adb -s WATCH_IP:CONNECTION_PORT install -r murmur-companion-wear-candidate.apk
+   adb -s WATCH_IP:CONNECTION_PORT install -r murmur-companion-wear-install.apk
    ```
 
-6. Open **Murmur Companion** in the watch's app launcher. Keep the phone unlocked with Murmur signed in during the first check. Agents should load from your configured Hermes connections.
+6. Open **Murmur Beta** in the watch's app launcher. Keep the phone unlocked with Murmur signed in during the first check. Agents should load from your configured Hermes connections.
 7. Choose an agent. Tap **Say something** or **Type a message**. Review the text, then tap **Send**. The watch does not send just because you dictated something.
 8. Read the reply. It refreshes every five seconds only while a busy chat is visible; **Refresh reply** checks on demand. Turn the crown to scroll.
 9. Disable wireless debugging and ADB debugging when finished installing. Normal use goes through the paired phone, not ADB.
@@ -115,12 +119,13 @@ Use `adb install -r` with the newer APK for each device. Install both from the s
 
 `INSTALL_FAILED_UPDATE_INCOMPATIBLE` means the signing key differs from the installed copy. Rebuild with the original key. If you choose to uninstall the old copy, local sign-in, settings and drafts will be removed; sign in again afterward. Do not uninstall casually to work around signing issues.
 
-To stop watch access without uninstalling, use **Settings → Pixel Watch → Turn access off** on the phone. To remove local account data, use **Settings → Forget this device**. Android Settings → Apps → Murmur Companion → Storage → Clear storage also clears local app data. Downloaded files you saved outside the app remain where you saved them.
+To stop watch access without uninstalling, use **Settings → Pixel Watch → Turn access off** on the phone. To remove local account data, use **Settings → Forget this device**. Android Settings → Apps → Murmur Beta → Storage → Clear storage also clears local app data. Downloaded files you saved outside the app remain where you saved them.
 
 ## Troubleshooting
 
 | Symptom | What to check |
 |---|---|
+| “App not installed” / signature conflict | Download **phone-install.apk** from **v0.3.0-beta.2** and open **Murmur Beta**. It uses a new beta ID, so the old Murmur Companion can remain installed. The wear APK is for the watch. If an independently built beta already occupies this new ID with a different key, it must be removed or rebuilt with its original key; removing it erases only its local data. |
 | Phone cannot load Murmur | Test the exact URL in Chrome. Confirm Tailscale is connected, the server is online, and tailnet policy permits the port. `.local` names generally need local networking; use a full MagicDNS hostname or tailnet IP remotely. |
 | HTTPS certificate error | Use the hostname on the certificate. Do not substitute the tailnet IP for a `*.ts.net` HTTPS hostname. The app will not bypass TLS errors. |
 | Login page keeps returning | Check the address belongs to the app proxy or standalone Murmur. Allow the actual Umbrel sign-in page when prompted. Some identity providers disallow embedded browsers; see [feature limitations](FEATURES.md). |
@@ -129,9 +134,9 @@ To stop watch access without uninstalling, use **Settings → Pixel Watch → Tu
 | A watch send has no confirmation | It may already have reached Murmur. Read the Watch chat on the phone before sending again. The app never automatically retries a send. |
 | Microphone missing on phone | Use HTTPS, allow Android microphone permission, and ensure Murmur's voice backend is configured. |
 | Watch dictation unavailable | Use **Type a message**; enable the watch's speech/keyboard service. Speech service availability is device-dependent. |
-| Native chat needs an attachment, group or rich tool card | Open **Full Murmur workspace** from Settings or the conversation menu. Native text chat does not yet render those features. |
+| Attach a file or photo | Tap **+** in the native composer and wait for the attached status before Send. For groups or interactive rich tools, open **Full Murmur workspace**. |
 | Download cannot be saved | Use a direct same-server HTTP(S) file download. Blob-generated or external downloads currently require a browser. |
-| No notifications for completed agents | Background Web Push is not implemented in this WebView client. Browser notification settings do not enable native push here. |
+| No notifications for completed agents | While a reply runs, choose **Notify when this reply finishes**, allow notification permission, and select it again. Follow is visible and bounded to 30 minutes. General Web Push is not implemented. |
 | Agent needs permission on watch | Choose **Continue on phone** and answer in Murmur. The watch never silently approves a tool call. |
 
 Still stuck? Include app/server versions, phone/watch model, the connection type and a redacted error in an issue. Never attach session cookies, keys, passwords or full private hostnames.

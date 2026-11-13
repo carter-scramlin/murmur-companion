@@ -1,49 +1,44 @@
-# Signing and beta releases
+# Building and publishing beta downloads
 
-Phone and watch must share an application ID and signing certificate. Preserve and securely back up a private distribution key outside the repository before starting a stable beta update channel. Losing it prevents updates to installed copies signed with that key.
+Public beta APKs use **one persistent private key**, not Android's default debug key and not a disposable runner key. Both modules use `dev.murmur.companion.beta`. The public certificate fingerprint is pinned in `signing/beta-certificate.sha256`; its presence forbids automatically generating a replacement key.
 
-## Public candidate
+## Signing host
 
-The [0.3.0 beta candidate](https://github.com/carter-scramlin/murmur-companion/releases/tag/v0.3.0-beta.1) provides optimized, non-debuggable release APKs, the matching ZIP, guide, checksums and certificate fingerprint. **Build and publish beta candidate** runs tests/lint/debug builds, then builds optimized APKs using a dedicated temporary candidate key that is removed after packaging. Published assets are preserved on reruns. An incomplete draft must be inspected/removed before retrying.
+The signing host retains the keystore and password under `${XDG_DATA_HOME:-$HOME/.local/share}/murmur-companion/signing/` (`beta.jks` and `password`). The directory and files are private to the current user. Keep an encrypted backup outside this computer. Do not commit, upload as an artifact, paste into an issue, or publish these files. Only the certificate fingerprint is public.
 
-The temporary candidate key is not a stable signing channel. Independently built candidates may require uninstalling old apps. The website links to fixed release assets and does not rebuild them on Pages deploys. See [BETA.md](BETA.md) for the gates before broad distribution.
-
-## Create a private distribution key
-
-Run JDK's `keytool` and let it prompt for the password:
+Use JDK 17 and Android SDK 36, then run:
 
 ```bash
-keytool -genkeypair -keystore /secure/path/murmur-companion.jks -alias murmur -keyalg RSA -keysize 4096 -validity 10000
+./scripts/package-beta.sh
 ```
 
-Never commit, attach or post the keystore or its passwords. Back up the private key securely. Set these environment variables in a trusted shell/secret manager:
+It runs core/phone/watch tests and lint, builds optimized install and debuggable APKs with the same retained key, verifies all four certificates/identities/flags, and packages `artifacts/beta-VERSION/`. Output must be empty to prevent mixing builds. Move a previous output directory aside before rebuilding the same version. Public releases must use a fresh version name and increasing versionCode.
 
-| Variable | Value |
-|---|---|
-| `MURMUR_KEYSTORE` | Absolute path to the `.jks` file |
-| `MURMUR_STORE_PASSWORD` | Keystore password |
-| `MURMUR_KEY_ALIAS` | `murmur`, if using the example |
-| `MURMUR_KEY_PASSWORD` | Key password |
+If the key is missing after the public fingerprint exists, restore the original private backup. **Never remove the pin or create a new key just to make a build pass.** Android upgrades and Wear Data Layer depend on certificate continuity. If the key is actually lost, a new package/channel and explicit migration are required.
 
-With JDK 17, Android SDK 36 and `ANDROID_HOME` configured, add `build-tools/36.0.0` to PATH and run:
+## Publish locally signed assets with GitHub
 
-```bash
-./scripts/package-release.sh
+When GitHub signing secrets are unavailable, the private key stays on the host. Commit the reviewed source to `main` and wait for its **Android & Wear OS** CI run to pass. On a separate `codex/publish-VERSION` branch based on that exact source commit, add only `staged-release/` containing the packaged assets and `PUBLICATION.json`:
+
+```json
+{"source_sha":"THE_TESTED_40_CHARACTER_SOURCE_COMMIT","version":"0.3.0-beta.2"}
 ```
 
-The script runs tests, lint and optimized signed release builds. It verifies both signatures, checks that the certificates and versions match and rejects debuggable APKs. The output is `artifacts/signed-beta-VERSION/`, containing `murmur-companion-phone.apk`, `murmur-companion-wear.apk`, a signed-beta ZIP, install guide, signing fingerprint and `SHA256SUMS`. It publishes nothing.
+Push the publication branch. **Publish verified beta downloads** checks that only staged assets differ from the source, verifies every checksum, package ID, certificate and debugging flag, requires successful source CI, then creates the GitHub Release as a draft, uploads all downloads, and publishes it. The release tag targets the source commit, not the publication branch. Binaries are absent from the normal source branch. The staging branch holds only already-public artifacts, never the key or password. Published releases are not overwritten.
 
-## GitHub signed beta workflow
+## Optional GitHub builds with the same key
 
-In **Settings → Secrets and variables → Actions**, configure:
+In repository Settings → Secrets and variables → Actions, configure:
 
-- `MURMUR_KEYSTORE_B64`: base64 encoding of the private distribution keystore.
-- `MURMUR_STORE_PASSWORD`, `MURMUR_KEY_ALIAS`, `MURMUR_KEY_PASSWORD`.
+- `MURMUR_KEYSTORE_B64`: base64 encoding of the existing `beta.jks`
+- `MURMUR_STORE_PASSWORD`: the saved password
+- `MURMUR_KEY_ALIAS`: `beta`
+- `MURMUR_KEY_PASSWORD`: the saved password
 
-Only trusted collaborators should run **Build signed beta**. It decodes the key into the runner's temporary directory, builds and verifies the release pair, removes the key and uploads only the signed-beta package as an Actions artifact. It does not replace the public candidate or automatically publish a release.
+Run **Build and publish signed beta**. It decodes the key only into the runner's temporary directory, builds/tests/verifies the same install/debug quartet, removes the key and publishes the assets. It fails if secrets are missing or the certificate differs from the pin. It never generates a fresh key. Repository signing secrets have not yet been configured; the public beta is signed on the local signing host.
 
-Before publishing a signed beta, complete the [hardware/Tailscale checks](BETA.md), increment both app versionNames and versionCodes, update notes/website links, build using the backed-up private key and publish the reviewed pair under a new tag. Never replace a published version with APKs signed by another key.
+## Verification keys and old releases
 
-## Build verification key
+Ordinary CI debug APKs use the runner's developer key. `verify-optimized.sh` creates and deletes a temporary validation key to test R8 builds. Neither is a distribution key or an update-compatible public APK.
 
-CI's `scripts/verify-optimized.sh` creates a disposable validation key solely to exercise R8/resource shrinking and APK verification. It is deleted on exit. Those test-signed APKs must not be distributed and are not uploaded with the debug artifacts. This is separate from the stable beta signing workflow.
+Versions before 0.3.0-beta.2 used disposable preview keys and `dev.murmur.companion`. The new beta ID allows coexistence and avoids their signature conflicts. Their private app data cannot be imported by another signing identity. Do not replace old release files to hide that history.

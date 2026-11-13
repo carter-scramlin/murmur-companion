@@ -33,9 +33,9 @@ public final class WatchRelayService extends WearableListenerService {
                         throw new Exception("Open Murmur on your phone. Enable notifications there for handoff reminders.");
                     NotificationManager manager = getSystemService(NotificationManager.class);
                     manager.createNotificationChannel(new NotificationChannel("handoff", "Continue from watch", NotificationManager.IMPORTANCE_DEFAULT));
-                    PendingIntent open = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+                    PendingIntent open = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class).putExtra("watch_hermes",request.optString("hermes")).putExtra("watch_profile",request.optString("profile")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
                     manager.notify(10, new Notification.Builder(this, "handoff").setSmallIcon(R.drawable.ic_launcher_foreground).setContentTitle("Continue in Murmur")
-                            .setContentText("Open your agent’s Watch chat to continue.").setVisibility(Notification.VISIBILITY_PRIVATE).setContentIntent(open).setAutoCancel(true).build());
+                            .setContentText("Tap to continue in your native Watch chat.").setVisibility(Notification.VISIBILITY_PRIVATE).setContentIntent(open).setAutoCancel(true).build());
                     response.put("status", "Tap the Murmur reminder on your phone.");
                 } else {
                     if (!action.equals("agents") && !action.equals("read") && !action.equals("send")) throw new Exception("Unsupported watch action.");

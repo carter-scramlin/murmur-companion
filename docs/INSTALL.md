@@ -10,11 +10,11 @@ This repository builds two separate apps: one for an Android phone and one for a
 - For remote access: Tailscale on the phone and the machine exposing Murmur, on the same tailnet. Follow [Tailscale setup](TAILSCALE.md).
 - To install on the watch: a computer with [Android SDK Platform Tools](https://developer.android.com/tools/releases/platform-tools) for the `adb` command. You do not need Android Studio, Java or Gradle when downloading the built APKs. Source builds optionally require JDK 17 and Android SDK 36.
 
-The current API integration was checked against Murmur source revision `27253d221302af4c2b76b95f993428d698322519` (package version 0.14.1). Older/newer servers may change the watch protocol. The upstream source was inspected, but a live server and physical Pixel Watch were not used for end-to-end verification. See [validation](VALIDATION.md).
+The native API integration was checked against Murmur source revisions `27253d221302af4c2b76b95f993428d698322519` and `2791c7e5234bae4ca0ad050c404b7b3913f687ab`. Older/newer servers may change the watch protocol. The upstream source was inspected, but a live server and physical Pixel Watch were not used for end-to-end verification. See [validation](VALIDATION.md).
 
 ## 2. Download both apps
 
-Open [Releases → v0.1.0](https://github.com/carter-scramlin/murmur-companion/releases/tag/v0.1.0) and expand **Assets**. Download `murmur-companion-0.1.0-debug.zip` and extract it. It contains:
+Open [Releases → v0.2.0](https://github.com/carter-scramlin/murmur-companion/releases/tag/v0.2.0) and expand **Assets**. Download `murmur-companion-0.2.0-debug.zip` and extract it. It contains:
 
 - `murmur-companion-phone-debug.apk` — install on the phone.
 - `murmur-companion-wear-debug.apk` — install on the watch.
@@ -66,13 +66,16 @@ Run commands from the folder containing your downloaded APKs. Replace `PHONE_SER
 
 1. Open **Murmur Companion** on the phone.
 2. Enter the root URL that opens Murmur, including `https://` and any port. Recommended: `https://umbrel.your-tailnet.ts.net` from Tailscale Serve.
-3. Tap **Connect to Murmur**. Complete your Umbrel or Murmur sign-in on the page. If sign-in changes hostname, the app shows that address and asks before continuing there.
-4. Verify that you can open an agent and read a chat. The app does not configure the server, install Murmur, or request your Hermes access key.
-5. Use **••• → Check connection** for a reachability and sign-in check. **••• → Open Tailscale** opens the VPN app if installed.
+3. Tap **Connect to Murmur**. Native agent and conversation lists load directly from your server.
+4. If sign-in is required, tap the sign-in card (or **••• → Connection & sign-in → Sign in / Workspace**). Finish the normal Umbrel/Murmur sign-in, then tap **Native app** at the top to return.
+5. Use **Agents** to choose an agent, then open a conversation or tap **+** for a new one. Type or dictate a draft, review it, and tap the send arrow. Tap stop to interrupt a running reply.
+6. Native approval cards show the proposed action; tap the card for details. **Allow once** asks you to confirm the action. Clarification cards open a native form.
+7. **Settings → Full Murmur workspace** keeps groups, models, memory, routines, integrations and rich content available. Sign-in and those advanced features use the explicit web screen.
+8. Use **••• → Connection & sign-in → Reconnect** after a VPN interruption. Reconnect never resends a message. If a send was unconfirmed, inspect the chat before sending again.
 
 For private LAN or tailnet HTTP URLs such as `http://100.80.10.20:PORT`, turn on **Allow a private HTTP connection** first. Public HTTP addresses are rejected. HTTPS is needed for web microphone capture and secure-context features. HTTP is not promoted automatically to HTTPS; use the actual reachable address.
 
-Use **••• → Pixel Watch** to check watch access and allow the optional handoff notification. This notification only helps you continue from the watch; it is not background agent Web Push.
+Use **Settings → Pixel Watch** to check watch access and allow the optional handoff notification. This notification only helps you continue from the watch; it is not background agent Web Push.
 
 ## 5. Install on Pixel Watch
 
@@ -102,15 +105,15 @@ Menu wording varies by Wear OS version. Use the watch's Settings search if an it
 8. Read the reply. It refreshes every five seconds only while a busy chat is visible; **Refresh reply** checks on demand. Turn the crown to scroll.
 9. Disable wireless debugging and ADB debugging when finished installing. Normal use goes through the paired phone, not ADB.
 
-**Continue on phone** posts a private handoff reminder on the phone when notification permission is granted. Tap the reminder, choose the same agent and open its **Watch chat**. It does not automatically navigate to the exact chat yet. Approvals must be answered in the full phone interface.
+**Continue on phone** posts a private handoff reminder on the phone when notification permission is granted. Tap the reminder to open that agent's existing **Watch chat** in the native phone UI. If the agent is unavailable or the chat does not exist, the app explains that rather than creating another chat. Approvals must be answered in the full phone interface.
 
 ## 6. Update or uninstall
 
 Use `adb install -r` with the newer APK for each device. Install both from the same build/signing key. Server chats survive app updates and uninstalls.
 
-`INSTALL_FAILED_UPDATE_INCOMPATIBLE` means the signing key differs from the installed copy. Rebuild with the original key. If you choose to uninstall the old copy, local sign-in and settings will be removed; sign in again afterward. Do not uninstall casually to work around signing issues.
+`INSTALL_FAILED_UPDATE_INCOMPATIBLE` means the signing key differs from the installed copy. Rebuild with the original key. If you choose to uninstall the old copy, local sign-in, settings and drafts will be removed; sign in again afterward. Do not uninstall casually to work around signing issues.
 
-To stop watch access without uninstalling, use **••• → Pixel Watch → Turn access off** on the phone. To remove local account data, use **••• → Forget this device**. Android Settings → Apps → Murmur Companion → Storage → Clear storage also clears local app data. Downloaded files you saved outside the app remain where you saved them.
+To stop watch access without uninstalling, use **Settings → Pixel Watch → Turn access off** on the phone. To remove local account data, use **Settings → Forget this device**. Android Settings → Apps → Murmur Companion → Storage → Clear storage also clears local app data. Downloaded files you saved outside the app remain where you saved them.
 
 ## Troubleshooting
 
@@ -124,6 +127,7 @@ To stop watch access without uninstalling, use **••• → Pixel Watch → T
 | A watch send has no confirmation | It may already have reached Murmur. Read the Watch chat on the phone before sending again. The app never automatically retries a send. |
 | Microphone missing on phone | Use HTTPS, allow Android microphone permission, and ensure Murmur's voice backend is configured. |
 | Watch dictation unavailable | Use **Type a message**; enable the watch's speech/keyboard service. Speech service availability is device-dependent. |
+| Native chat needs an attachment, group or rich tool card | Open **Full Murmur workspace** from Settings or the conversation menu. Native text chat does not yet render those features. |
 | Download cannot be saved | Use a direct same-server HTTP(S) file download. Blob-generated or external downloads currently require a browser. |
 | No notifications for completed agents | Background Web Push is not implemented in this WebView client. Browser notification settings do not enable native push here. |
 | Agent needs permission on watch | Choose **Continue on phone** and answer in Murmur. The watch never silently approves a tool call. |

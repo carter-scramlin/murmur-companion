@@ -31,7 +31,7 @@ For local testing use debug builds. Debug APKs built in one CI job share a key, 
 
 ## Public preview downloads
 
-The [v0.1.0 GitHub Release](https://github.com/carter-scramlin/murmur-companion/releases/tag/v0.1.0) provides both installable debug APKs, a combined ZIP, instructions, checksums and a public signing fingerprint. The **Build and publish preview release** workflow tests, lints, builds and verifies the matching pair, uploads every asset to a draft, then publishes it as a prerelease. Published assets are preserved on reruns. If a failed upload leaves a draft, inspect and remove that incomplete draft before rerunning.
+The [v0.2.0 GitHub Release](https://github.com/carter-scramlin/murmur-companion/releases/tag/v0.2.0) provides both installable debug APKs, a combined ZIP, instructions, checksums and a public signing fingerprint. The **Build and publish preview release** workflow tests, lints, builds and verifies the matching pair, uploads every asset to a draft, then publishes it as a prerelease. Published assets are preserved on reruns. If a failed upload leaves a draft, inspect and remove that incomplete draft before rerunning.
 
 The download website links to these fixed release assets. Pages deployments do not rebuild the apps or replace their signing key. For a new preview version, update both app versions, the packaging scripts, release workflow/tag, release notes and website links together. Keep using a permanent private signing key for a stable update channel.
 

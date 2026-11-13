@@ -22,4 +22,4 @@ These are preview debug builds. A fresh clean Actions runner can create a differ
 
 ## Versioned release downloads
 
-The download buttons now use the fixed v0.1.0 GitHub Release assets. The Pages workflow deploys only the static site. The separate preview release workflow builds and verifies both apps before publishing. See [RELEASING.md](RELEASING.md).
+The download buttons now use the fixed v0.2.0 GitHub Release assets. The Pages workflow deploys only the static site. The separate preview release workflow builds and verifies both apps before publishing. See [RELEASING.md](RELEASING.md).

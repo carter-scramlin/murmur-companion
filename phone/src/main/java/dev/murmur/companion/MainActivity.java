@@ -1,282 +1,271 @@
 package dev.murmur.companion;
 
-import android.Manifest;
 import android.app.*;
 import android.content.*;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
-import android.net.*;
-import android.net.http.SslError;
 import android.os.*;
-import android.provider.Settings;
+import android.speech.RecognizerIntent;
+import android.text.*;
+import android.text.method.LinkMovementMethod;
 import android.view.*;
-import android.webkit.*;
+import android.view.inputmethod.*;
+import android.webkit.CookieManager;
+import android.webkit.WebStorage;
 import android.widget.*;
+import androidx.lifecycle.ViewModelProvider;
+import androidx.recyclerview.widget.*;
 import dev.murmur.companion.core.*;
-import java.io.*;
+import org.json.*;
 import java.util.*;
-import java.util.concurrent.*;
-import okhttp3.*;
+import static dev.murmur.companion.NativeViews.*;
 
-/** Native connection and device integration around the real Murmur interface. */
+/** Native Android launcher, conversations and streaming transcript. */
 public class MainActivity extends androidx.activity.ComponentActivity {
-    static final int INK = Color.rgb(29,22,38), MUTED = Color.rgb(112,104,122), PAPER = Color.rgb(254,250,237), VIOLET = Color.rgb(132,96,206);
-    private LinearLayout root;
-    private WebView web;
+    NativeStore store;
+    private LinearLayout root, body, toolbar, composer, requestBox;
+    private TextView title, subtitle, banner, empty, sendHint;
+    private EditText input;
+    private NativeChat composerChat;
+    private View send;
+    private RecyclerView list;
+    private NativeAdapter adapter;
     private Endpoint endpoint;
-    private FrameLayout frame;
-    private ProgressBar progress;
-    private TextView address;
-    private PermissionRequest microphone;
-    private ValueCallback<Uri[]> fileCallback;
-    private String downloadUrl, downloadCookies;
-    private final ExecutorService io = Executors.newSingleThreadExecutor();
-    private final Set<String> allowedSignIn = new HashSet<>();
-    private boolean showingConnection;
-    private android.content.SharedPreferences prefs() { return getSharedPreferences("connection", MODE_PRIVATE); }
-    @Override public void onCreate(Bundle state) {
+    private String screen="", query="", surface="connection";
+    private final Handler main=new Handler(Looper.getMainLooper());
+    private boolean updatePending;
+    private android.content.SharedPreferences prefs(){return getSharedPreferences("connection",MODE_PRIVATE);}
+    @Override public void onCreate(Bundle state){
         super.onCreate(state);
-        getOnBackPressedDispatcher().addCallback(this, new androidx.activity.OnBackPressedCallback(true) { @Override public void handleOnBackPressed() { handleBack(); } });
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
-        getWindow().setStatusBarColor(PAPER); getWindow().setNavigationBarColor(PAPER);
-        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
-        String server = prefs().getString("origin", "");
-        try { endpoint = new Endpoint(server, prefs().getBoolean("http", false)); showWeb(state); }
-        catch (IllegalArgumentException ex) { showConnection(); }
+        getWindow().setStatusBarColor(PAPER);getWindow().setNavigationBarColor(PAPER);
+        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR|View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+        store=new ViewModelProvider(this).get(NativeStore.class);
+        store.observer=this::scheduleRender;
+        if(state!=null)query=state.getString("query","");
+        getOnBackPressedDispatcher().addCallback(this,new androidx.activity.OnBackPressedCallback(true){@Override public void handleOnBackPressed(){
+            if(surface.equals("native")&&store.chat!=null){rememberDraft();store.back();}
+            else if(surface.equals("native")&&!store.tab.equals("chats")){store.tab="chats";render();}
+            else if(surface.equals("connection")&&endpoint!=null)showNative();else finish();
+        }});
+        try{endpoint=new Endpoint(prefs().getString("origin",""),prefs().getBoolean("http",false));showNative();configure();}
+        catch(IllegalArgumentException ex){showConnection();}
+        handoff(getIntent());
     }
-    private void base() {
-        root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setBackgroundColor(PAPER);
-        root.setOnApplyWindowInsetsListener((view, insets) -> {
-            if (Build.VERSION.SDK_INT >= 30) {
-                android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout() | WindowInsets.Type.ime());
-                view.setPadding(bars.left, bars.top, bars.right, bars.bottom); return WindowInsets.CONSUMED;
+    private void handoff(Intent intent){if(intent!=null&&intent.hasExtra("watch_hermes")){store.openWatch(intent.getStringExtra("watch_hermes"),intent.getStringExtra("watch_profile"));intent.removeExtra("watch_hermes");intent.removeExtra("watch_profile");}}
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);handoff(intent);}
+    private void configure(){if(endpoint!=null)store.configure(endpoint,CookieManager.getInstance().getCookie(endpoint.origin));}
+    private int d(float n){return dp(this,n);}
+    private void base(){
+        root=column(this);root.setBackgroundColor(PAPER);
+        root.setOnApplyWindowInsetsListener((v,i)->{
+            if(Build.VERSION.SDK_INT>=30){android.graphics.Insets bars=i.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout()|WindowInsets.Type.ime());v.setPadding(bars.left,bars.top,bars.right,bars.bottom);return WindowInsets.CONSUMED;}
+            v.setPadding(i.getSystemWindowInsetLeft(),i.getSystemWindowInsetTop(),i.getSystemWindowInsetRight(),i.getSystemWindowInsetBottom());return i.consumeSystemWindowInsets();
+        });setContentView(root);
+        if(Build.VERSION.SDK_INT>=30&&getWindow().getInsetsController()!=null)getWindow().getInsetsController().setSystemBarsAppearance(WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS|WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS|WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS);
+    }
+    private void space(LinearLayout parent,int n){parent.addView(new View(this),new LinearLayout.LayoutParams(1,d(n)));}
+    private void showConnection(){
+        surface="connection";screen="";base();
+        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);root.addView(scroll);
+        LinearLayout page=column(this);pad(page,28,36,28);scroll.addView(page);
+        ImageView mark=new ImageView(this);mark.setImageResource(R.drawable.murmur_icon);mark.setContentDescription("Murmur Companion");page.addView(mark,new LinearLayout.LayoutParams(d(80),d(80)));space(page,24);
+        page.addView(text(this,"Your agents.\nRight here.",36,INK,true));space(page,12);
+        page.addView(text(this,"Native conversations for Android. A little closer to home.",17,MUTED,false));space(page,32);
+        page.addView(text(this,"Your Murmur address",14,INK,true));space(page,8);
+        EditText url=new EditText(this);url.setSingleLine();url.setTextSize(16);url.setTextColor(INK);url.setHintTextColor(MUTED);url.setHint("https://umbrel.your-tailnet.ts.net");url.setText(prefs().getString("origin",""));url.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_URI);pad(url,16,16,16);url.setBackground(shape(this,CARD,18));url.setContentDescription("Murmur server address");page.addView(url,new LinearLayout.LayoutParams(-1,-2));space(page,8);
+        page.addView(text(this,"Use the address that opens Murmur. Tailscale HTTPS works at home and away.",13,MUTED,false));
+        Switch local=new Switch(this);local.setText("Allow a private HTTP connection");local.setTextColor(INK);local.setTextSize(14);local.setMinHeight(d(56));local.setChecked(prefs().getBoolean("http",false));page.addView(local);
+        TextView problem=text(this,"",13,RED,false);problem.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);page.addView(problem);space(page,8);
+        page.addView(button(this,"Connect to Murmur",true,()->{try{endpoint=new Endpoint(url.getText().toString(),local.isChecked());prefs().edit().putString("origin",endpoint.origin).putBoolean("http",local.isChecked()).apply();showNative();configure();}catch(IllegalArgumentException ex){problem.setText(ex.getMessage());}}),new LinearLayout.LayoutParams(-1,d(54)));space(page,12);
+        page.addView(button(this,"Open Tailscale",false,this::tailscale),new LinearLayout.LayoutParams(-1,d(52)));space(page,28);
+        page.addView(text(this,"PRIVATE BY DESIGN",11,PURPLE,true));space(page,8);page.addView(text(this,"Your phone connects to your server. Your watch uses the paired phone. No added chat service or analytics.",14,MUTED,false));space(page,24);
+        page.addView(text(this,"Independent companion for Murmur by Umbrel",12,MUTED,false));
+    }
+    void showNative(){surface="native";screen="";render();}
+    private void scheduleRender(){if(!surface.equals("native")||updatePending)return;updatePending=true;main.postDelayed(()->{updatePending=false;if(!isDestroyed()&&!isFinishing())render();},40);}
+    private String key(){return store.chat!=null?"chat:"+store.chat.hermes+":"+store.chat.profile+":"+store.chat.storedId:store.tab+":"+(store.selected==null?"":store.selected.key());}
+    private void render(){
+        if(!surface.equals("native"))return;
+        String next=key();if(!next.equals(screen)){screen=next;buildScreen();}
+        if(store.chat!=null){
+            NativeChat chat=store.chat;title.setText(chat.title.isBlank()?"Conversation":chat.title);subtitle.setText((store.selected==null?"Agent":store.selected.name)+" · "+(store.loading?"Syncing…":chat.status));
+            boolean canSend=store.online&&!store.loading&&!store.sending&&chat.ready&&chat.requests.isEmpty()&&!chat.busy;
+            if(send instanceof Glyph glyph){String name=chat.busy?"stop":"send";if(!glyph.name.equals(name))replaceSend(name);}
+            send.setEnabled(chat.busy&&store.online||canSend&&input!=null&&!input.getText().toString().trim().isEmpty());send.setAlpha(send.isEnabled()?1f:.4f);
+            send.setContentDescription(chat.busy?"Stop response":"Send message");
+            sendHint.setText(store.loading?"Syncing conversation…":!chat.requests.isEmpty()?"Your agent needs your answer":!store.online?"Reconnect to send · Your draft stays here":chat.busy?"Your agent is working · Tap stop to interrupt":"Your messages go directly to your Murmur");
+            updateRequests(chat);
+            List<Item> items=new ArrayList<>();for(NativeChat.Row row:chat.rows)items.add(new Item(row.id,row.role,row.text,row.streaming?"streaming":""));
+            if(items.isEmpty())items.add(new Item("welcome","welcome",store.selected==null?"Say hello.":"A little space for you and "+store.selected.name+".","Start a conversation. Your messages stay on your server."));
+            boolean bottom=!list.canScrollVertically(1);adapter.submit(items,()->{if(bottom&&!items.isEmpty())list.scrollToPosition(items.size()-1);});
+        }else if(!store.tab.equals("settings")){
+            title.setText(store.tab.equals("agents")?"Your agents":"Conversations");subtitle.setText(store.tab.equals("agents")?"A familiar face, whenever you need one":store.selected==null?store.connection:store.selected.name+" · "+store.selected.home);
+            List<Item> items=new ArrayList<>();
+            if(store.tab.equals("agents")){
+                for(NativeStore.Agent a:store.agents)if((a.name+" "+a.home).toLowerCase(Locale.ROOT).contains(query.toLowerCase(Locale.ROOT)))items.add(new Item("agent:"+a.key(),"agent",a.name,a.home));
+            }else if(store.selected!=null){
+                JSONArray sessions=store.lists.get(store.selected.key());if(sessions!=null)for(int i=0;i<sessions.length();i++){JSONObject s=sessions.optJSONObject(i);if(s==null)continue;String t=s.optString("title","Untitled conversation"),preview=s.optString("preview",s.optInt("message_count")+" messages");if((t+" "+preview).toLowerCase(Locale.ROOT).contains(query.toLowerCase(Locale.ROOT)))items.add(new Item(s.optString("id"),"chat",t.isBlank()?"Untitled conversation":t,preview));}
             }
-            view.setPadding(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(), insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom()); return insets.consumeSystemWindowInsets();
-        });
-        setContentView(root);
-        if (Build.VERSION.SDK_INT >= 30) getWindow().getInsetsController().setSystemBarsAppearance(WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS, WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS);
+            if(items.isEmpty())items.add(new Item("empty","empty",store.loading?"Finding your conversations…":query.isBlank()?(store.tab.equals("agents")?"Your agents will be here.":"Make room for a new thought."):"No matches",store.loading?"Connecting privately to your Murmur.":store.agents.isEmpty()?"Sign in to your server or open the workspace to set up your first agent.":"Choose an agent and start a new conversation."));
+            adapter.submit(items,null);
+        }
+        banner.setText(store.error.isBlank()?store.loading?"Connecting…":store.online?"":"Offline · Tap Reconnect":store.error);
+        banner.setVisibility(banner.getText().length()==0?View.GONE:View.VISIBLE);
     }
-    private int dp(float value) { return (int)(value * getResources().getDisplayMetrics().density + .5f); }
-    private TextView text(String value, int size, int color, boolean bold) {
-        TextView label = new TextView(this); label.setText(value); label.setTextSize(size); label.setTextColor(color);
-        if (bold) label.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
-        label.setLineSpacing(dp(3), 1); return label;
+    private void buildScreen(){
+        rememberDraft();base();input=null;composerChat=null;send=null;adapter=null;
+        toolbar=row(this);pad(toolbar,12,8,8);root.addView(toolbar,new LinearLayout.LayoutParams(-1,d(80)));
+        boolean chat=store.chat!=null;
+        if(chat)toolbar.addView(icon(this,"back","Back to conversations",()->{rememberDraft();store.back();}));
+        else {ImageView logo=new ImageView(this);logo.setImageResource(R.drawable.murmur_icon);logo.setContentDescription("Murmur Companion");LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(d(42),d(42));lp.setMargins(d(4),0,d(12),0);toolbar.addView(logo,lp);}
+        LinearLayout heading=column(this);title=text(this,"",chat?19:25,INK,true);title.setMaxLines(1);title.setEllipsize(TextUtils.TruncateAt.END);subtitle=text(this,"",11,MUTED,false);subtitle.setMaxLines(1);subtitle.setEllipsize(TextUtils.TruncateAt.END);heading.addView(title);heading.addView(subtitle);toolbar.addView(heading,new LinearLayout.LayoutParams(0,-2,1));
+        if(!chat&&!store.tab.equals("settings"))toolbar.addView(icon(this,"plus","New conversation",this::chooseNewChat));
+        toolbar.addView(icon(this,"more","Conversation and connection options",this::menu));
+        banner=text(this,"",13,RED,false);pad(banner,20,10,10);banner.setBackgroundColor(0xfff7e9e8);banner.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);banner.setOnClickListener(v->connectionActions());root.addView(banner,new LinearLayout.LayoutParams(-1,-2));
+        body=column(this);root.addView(body,new LinearLayout.LayoutParams(-1,0,1));
+        if(store.tab.equals("settings")&&!chat){buildSettings();}
+        else{
+            if(!chat)buildSearch();
+            list=new RecyclerView(this);LinearLayoutManager manager=new LinearLayoutManager(this);manager.setStackFromEnd(chat);list.setLayoutManager(manager);list.setClipToPadding(false);list.setPadding(d(16),d(8),d(16),d(12));list.setItemAnimator(null);list.setHasFixedSize(false);adapter=new NativeAdapter();list.setAdapter(adapter);body.addView(list,new LinearLayout.LayoutParams(-1,0,1));
+            if(chat)buildComposer();
+        }
+        if(!chat)buildNavigation();
     }
-    private GradientDrawable shape(int color, int radius) { GradientDrawable bg = new GradientDrawable(); bg.setColor(color); bg.setCornerRadius(dp(radius)); return bg; }
-    private Button button(String label, boolean primary, Runnable action) {
-        Button button = new Button(this); button.setText(label); button.setTextSize(15); button.setAllCaps(false);
-        button.setTextColor(primary ? Color.WHITE : INK); button.setBackground(shape(primary ? VIOLET : Color.rgb(240,235,226), 18));
-        button.setMinHeight(dp(54)); button.setOnClickListener(v -> action.run());
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2); p.topMargin = dp(12); button.setLayoutParams(p); return button;
+    private void buildSearch(){
+        LinearLayout search=row(this);search.setBackground(shape(this,0xfff0ecef,18));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,d(48));lp.setMargins(d(20),d(4),d(20),d(16));body.addView(search,lp);
+        View glyph=new Glyph(this,"search");search.addView(glyph,new LinearLayout.LayoutParams(d(48),d(44)));
+        EditText field=new EditText(this);field.setText(query);field.setTextSize(14);field.setTextColor(INK);field.setHintTextColor(MUTED);field.setHint(store.tab.equals("agents")?"Find an agent":"Search conversations");field.setContentDescription(field.getHint());field.setSingleLine();field.setPadding(0,0,d(12),0);field.setBackgroundColor(Color.TRANSPARENT);search.addView(field,new LinearLayout.LayoutParams(0,-1,1));
+        field.addTextChangedListener(watcher(value->{query=value;scheduleRender();}));
+        if(!store.tab.equals("agents")&&store.selected!=null){LinearLayout r=row(this);pad(r,22,0,8);TextView label=text(this,"WITH "+store.selected.name.toUpperCase(Locale.ROOT),10,PURPLE,true);r.addView(label,new LinearLayout.LayoutParams(0,-2,1));TextView change=text(this,"Change agent",12,PURPLE,true);change.setPadding(d(8),d(8),d(8),d(8));change.setBackground(ripple(this,Color.TRANSPARENT,12));change.setOnClickListener(v->{query="";store.tab="agents";render();});r.addView(change);body.addView(r);}
     }
-    private void gap(LinearLayout layout, int height) { View gap = new View(this); layout.addView(gap, new LinearLayout.LayoutParams(1, dp(height))); }
-    private void showConnection() {
-        showingConnection = true;
-        if (microphone != null) { microphone.deny(); microphone = null; }
-        if (web != null) { web.destroy(); web = null; }
-        base();
-        ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); root.addView(scroll, new LinearLayout.LayoutParams(-1, -1));
-        LinearLayout page = new LinearLayout(this); page.setOrientation(LinearLayout.VERTICAL); page.setPadding(dp(28), dp(40), dp(28), dp(32)); scroll.addView(page);
-        android.widget.ImageView mark = new android.widget.ImageView(this); mark.setImageResource(R.drawable.murmur_icon); mark.setContentDescription("Two Murmur buddies");
-        mark.setBackground(shape(Color.rgb(244,237,221), 24)); page.addView(mark, new LinearLayout.LayoutParams(dp(90), dp(90)));
-        gap(page, 28); page.addView(text("Your agents.\nA little closer.", 36, INK, true)); gap(page, 12);
-        page.addView(text("Murmur on your phone, and a quiet conversation on your wrist.", 17, MUTED, false)); gap(page, 32);
-        page.addView(text("Your Murmur address", 14, INK, true)); gap(page, 8);
-        EditText url = new EditText(this); url.setSingleLine(true); url.setTextSize(16); url.setTextColor(INK); url.setHintTextColor(MUTED);
-        url.setHint("https://umbrel.your-tailnet.ts.net"); url.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
-        url.setText(prefs().getString("origin", "")); url.setPadding(dp(16), dp(16), dp(16), dp(16)); url.setBackground(shape(Color.WHITE, 16));
-        url.setContentDescription("Murmur server address"); page.addView(url, new LinearLayout.LayoutParams(-1, -2)); gap(page, 8);
-        page.addView(text("Paste the address that opens Murmur in your browser. Use Tailscale HTTPS for access away from home.", 13, MUTED, false));
-        Switch local = new Switch(this); local.setText("Allow a private HTTP connection"); local.setTextSize(14); local.setTextColor(INK); local.setMinHeight(dp(54)); local.setChecked(prefs().getBoolean("http", false)); page.addView(local);
-        TextView httpHint = text("HTTP has no browser TLS protection. Voice needs HTTPS; Tailscale still encrypts traffic between tailnet devices.", 12, MUTED, false); page.addView(httpHint);
-        TextView error = text("", 13, Color.rgb(163,48,57), false); error.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE); page.addView(error);
-        page.addView(button("Connect to Murmur", true, () -> {
-            try {
-                Endpoint next = new Endpoint(url.getText().toString(), local.isChecked());
-                endpoint = next; allowedSignIn.clear();
-                prefs().edit().putString("origin", next.origin).putBoolean("http", local.isChecked()).apply(); showWeb(null);
-            } catch (IllegalArgumentException ex) { error.setText(ex.getMessage()); }
-        }));
-        page.addView(button("Open Tailscale", false, this::openTailscale)); gap(page, 28);
-        page.addView(text("PAIR ONCE. REACH HOME ANYWHERE.", 11, VIOLET, true)); gap(page, 8);
-        page.addView(text("Connect your phone and Umbrel to the same tailnet. Your Pixel Watch uses the paired phone’s connection.", 14, MUTED, false)); gap(page, 24);
-        page.addView(text("Murmur Companion · Independent, open source\nMade for Murmur by Umbrel", 12, MUTED, false));
-    }
-    @SuppressWarnings("SetJavaScriptEnabled") private void showWeb(Bundle state) {
-        showingConnection = false; base();
-        LinearLayout toolbar = new LinearLayout(this); toolbar.setGravity(Gravity.CENTER_VERTICAL); toolbar.setPadding(dp(16), 0, dp(8), 0);
-        TextView brand = text("murmur", 18, INK, true); toolbar.addView(brand);
-        address = text(Uri.parse(endpoint.origin).getHost(), 11, MUTED, false); address.setMaxLines(1); address.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        address.setPadding(dp(12), 0, dp(8), 0); toolbar.addView(address, new LinearLayout.LayoutParams(0, -2, 1));
-        Button menu = new Button(this); menu.setText("•••"); menu.setContentDescription("Connection and app settings"); menu.setTextColor(INK); menu.setBackgroundColor(Color.TRANSPARENT); menu.setOnClickListener(v -> showMenu(menu)); toolbar.addView(menu, new LinearLayout.LayoutParams(dp(48), dp(48)));
-        root.addView(toolbar, new LinearLayout.LayoutParams(-1, dp(48)));
-        progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal); progress.setMax(100); root.addView(progress, new LinearLayout.LayoutParams(-1, dp(2)));
-        frame = new FrameLayout(this); root.addView(frame, new LinearLayout.LayoutParams(-1, 0, 1));
-        web = new WebView(this); web.setBackgroundColor(PAPER); frame.addView(web, new FrameLayout.LayoutParams(-1, -1));
-        WebSettings settings = web.getSettings(); settings.setJavaScriptEnabled(true); settings.setDomStorageEnabled(true);
-        settings.setAllowFileAccess(false); settings.setAllowContentAccess(false); settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        settings.setMediaPlaybackRequiresUserGesture(false); settings.setSupportMultipleWindows(true); settings.setJavaScriptCanOpenWindowsAutomatically(false);
-        settings.setSafeBrowsingEnabled(true);
-        CookieManager.getInstance().setAcceptCookie(true); CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
-        web.setWebViewClient(new WebViewClient() {
-            @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                if (!request.isForMainFrame()) return false;
-                return navigate(request.getUrl().toString());
-            }
-            @Override public void onPageFinished(WebView view, String url) { address.setText(Uri.parse(url).getHost()); CookieManager.getInstance().flush(); }
-            @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) { if (request.isForMainFrame()) showFailure("Can't reach your Murmur", "Check Tailscale, then try again. Your Umbrel may be asleep or restarting."); }
-            @Override public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse response) { if (request.isForMainFrame() && response.getStatusCode() >= 500) showFailure("Murmur is taking a moment", "Your server answered, but Murmur isn't ready. Try again shortly."); }
-            @Override public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) { handler.cancel(); showFailure("This connection isn't trusted", "Check the address and the server's HTTPS certificate. Tailscale Serve provides a trusted HTTPS address."); }
-            @Override public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) { frame.removeView(view); view.destroy(); web = null; showFailure("Let's reopen Murmur", "Android closed the page to free memory."); return true; }
-        });
-        web.setWebChromeClient(new WebChromeClient() {
-            @Override public void onProgressChanged(WebView view, int value) { progress.setProgress(value); progress.setVisibility(value == 100 ? View.GONE : View.VISIBLE); }
-            @Override public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
-                if (!endpoint.contains(view.getUrl())) return false;
-                if (fileCallback != null) fileCallback.onReceiveValue(null); fileCallback = callback;
-                try { startActivityForResult(params.createIntent(), 20); } catch (ActivityNotFoundException ex) { fileCallback.onReceiveValue(null); fileCallback = null; }
-                return true;
-            }
-            @Override public void onPermissionRequest(PermissionRequest request) { runOnUiThread(() -> {
-                if (!endpoint.contains(request.getOrigin().toString()) || !endpoint.origin.startsWith("https:")) { request.deny(); return; }
-                if (!Arrays.asList(request.getResources()).contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) { request.deny(); return; }
-                if (microphone != null) microphone.deny(); microphone = request;
-                if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) grantMicrophone();
-                else requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, 21);
-            }); }
-            @Override public void onPermissionRequestCanceled(PermissionRequest request) { if (microphone == request) microphone = null; }
-            @Override public boolean onCreateWindow(WebView view, boolean dialog, boolean gesture, Message result) {
-                if (!gesture) return false;
-                WebView popup = new WebView(MainActivity.this);
-                popup.setWebViewClient(new WebViewClient() {
-                    @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest request) {
-                        String url = request.getUrl().toString();
-                        if (endpoint.contains(url)) web.loadUrl(url); else openExternal(url);
-                        popup.destroy(); return true;
-                    }
-                });
-                ((WebView.WebViewTransport) result.obj).setWebView(popup); result.sendToTarget(); return true;
-            }
-        });
-        web.setDownloadListener((url, agent, disposition, mime, length) -> {
-            if (!endpoint.contains(url)) { toast("Open this download in your browser."); return; }
-            downloadUrl = url; downloadCookies = CookieManager.getInstance().getCookie(endpoint.origin);
-            Intent save = new Intent(Intent.ACTION_CREATE_DOCUMENT).setType(mime == null ? "application/octet-stream" : mime).addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE, URLUtil.guessFileName(url, disposition, mime));
-            try { startActivityForResult(save, 22); } catch (ActivityNotFoundException ex) { toast("No file picker is available."); }
-        });
-        if (state == null || web.restoreState(state.getBundle("web") == null ? new Bundle() : state.getBundle("web")) == null) web.loadUrl(endpoint.origin);
-    }
-    private boolean navigate(String url) {
-        if (endpoint.contains(url)) return false;
-        Uri uri = Uri.parse(url); String scheme = uri.getScheme();
-        if (!"https".equals(scheme)) { if ("mailto".equals(scheme) || "tel".equals(scheme)) openExternal(url); else toast("Only your saved server and HTTPS pages can open here."); return true; }
-        if (allowedSignIn.contains(uri.getHost())) return false;
-        new AlertDialog.Builder(this).setTitle("Open " + uri.getHost() + "?")
-                .setMessage("You're leaving your saved Murmur server. Continue here if this is your Umbrel sign-in, or open the link in your browser.")
-                .setPositiveButton("Continue here", (d,w) -> { allowedSignIn.add(uri.getHost()); web.loadUrl(url); })
-                .setNeutralButton("Browser", (d,w) -> openExternal(url)).setNegativeButton("Cancel", null).show(); return true;
-    }
-    private void grantMicrophone() {
-        if (microphone != null) {
-            if (endpoint != null && endpoint.contains(microphone.getOrigin().toString()) && web != null && endpoint.contains(web.getUrl())) microphone.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
-            else microphone.deny();
-            microphone = null;
+    private void buildNavigation(){
+        LinearLayout nav=row(this);nav.setBackgroundColor(CARD);pad(nav,12,5,8);root.addView(nav,new LinearLayout.LayoutParams(-1,d(76)));
+        String[] ids={"chats","agents","settings"},labels={"Chats","Agents","Settings"};
+        for(int i=0;i<ids.length;i++){
+            String id=ids[i];LinearLayout item=column(this);item.setGravity(Gravity.CENTER);item.setContentDescription(labels[i]);item.setBackground(ripple(this,Color.TRANSPARENT,18));item.setOnClickListener(v->{query="";store.tab=id;render();});
+            View icon=new Glyph(this,id);icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);icon.setBackground(shape(this,store.tab.equals(id)?SOFT:Color.TRANSPARENT,20));item.addView(icon,new LinearLayout.LayoutParams(d(58),d(32)));TextView label=text(this,labels[i],11,store.tab.equals(id)?PURPLE:MUTED,store.tab.equals(id));label.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);label.setGravity(Gravity.CENTER);item.addView(label);nav.addView(item,new LinearLayout.LayoutParams(0,-1,1));
         }
     }
-    @Override public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
-        super.onRequestPermissionsResult(request, permissions, results);
-        if (request == 21 && microphone != null) { if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) grantMicrophone(); else { microphone.deny(); microphone = null; } }
+    private void buildComposer(){
+        requestBox=column(this);body.addView(requestBox,new LinearLayout.LayoutParams(-1,-2));
+        LinearLayout container=column(this);pad(container,16,8,8);container.setBackgroundColor(PAPER);body.addView(container,new LinearLayout.LayoutParams(-1,-2));
+        composer=row(this);composer.setGravity(Gravity.BOTTOM);composer.setBackground(shape(this,CARD,26));pad(composer,4,4,4);container.addView(composer,new LinearLayout.LayoutParams(-1,-2));
+        composer.addView(icon(this,"mic","Dictate a message",this::dictate));
+        composerChat=store.chat;
+        input=new EditText(this);input.setTextSize(16);input.setTextColor(INK);input.setHintTextColor(MUTED);input.setHint("Message your agent…");input.setContentDescription("Message your agent");input.setBackgroundColor(Color.TRANSPARENT);input.setMinLines(1);input.setMaxLines(5);input.setPadding(d(4),d(12),d(4),d(12));input.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);input.setImeOptions(EditorInfo.IME_FLAG_NO_EXTRACT_UI);input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(32000)});
+        String draft=store.drafts.getOrDefault(store.chat.key(),getSharedPreferences("drafts",0).getString(draftKey(store.chat),""));input.setText(draft);input.setSelection(input.length());composer.addView(input,new LinearLayout.LayoutParams(0,-2,1));
+        replaceSend("send");
+        input.addTextChangedListener(watcher(value->{if(composerChat!=null)store.drafts.put(composerChat.key(),value);scheduleRender();}));
+        sendHint=text(this,"",10,MUTED,false);sendHint.setGravity(Gravity.CENTER);sendHint.setPadding(0,d(7),0,0);container.addView(sendHint);
     }
-    private void showMenu(View anchor) {
-        PopupMenu menu = new PopupMenu(this, anchor);
-        String[] labels = {"Reload", "Check connection", "Pixel Watch", "Open Tailscale", "Open in browser", "Change server", "Forget this device", "About"};
-        for (int i = 0; i < labels.length; i++) menu.getMenu().add(0, i, i, labels[i]);
-        menu.setOnMenuItemClickListener(item -> {
-            switch (item.getItemId()) {
-                case 0 -> { if (web != null) web.reload(); }
-                case 1 -> diagnose();
-                case 2 -> watchSettings();
-                case 3 -> openTailscale();
-                case 4 -> openExternal(endpoint.origin);
-                case 5 -> showConnection();
-                case 6 -> new AlertDialog.Builder(this).setTitle("Forget this device?").setMessage("Remove saved server details and this app's sign-in cookies. Your chats stay on Murmur.").setPositiveButton("Forget", (d,w) -> forget()).setNegativeButton("Cancel", null).show();
-                case 7 -> new AlertDialog.Builder(this).setTitle("Murmur Companion 0.1.0").setMessage("Independent Android and Wear OS clients for Murmur by Umbrel. Not affiliated with or endorsed by Umbrel or Tailscale.\n\nYour conversations go to your server. The watch relays through your phone.\n\nThe phone loads Murmur's mobile UI. Background web push and browser-only sign-ins may require Chrome; see the feature matrix in the README.").setPositiveButton("Done", null).show();
-            } return true;
-        }); menu.show();
+    private void replaceSend(String name){
+        if(send!=null)composer.removeView(send);send=icon(this,name,name.equals("stop")?"Stop response":"Send message",()->{
+            if(store.chat==null)return;
+            if(store.chat.busy){store.stop();return;}
+            String value=input.getText().toString().trim();if(value.isEmpty())return;
+            if(!store.online||store.loading||store.sending||!store.chat.ready||!store.chat.requests.isEmpty())return;
+            store.send(value);input.setText("");getSharedPreferences("drafts",0).edit().remove(draftKey(store.chat)).apply();
+            send.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK);
+        });send.setBackground(ripple(this,PURPLE,24));composer.addView(send,new LinearLayout.LayoutParams(d(44),d(44)));
     }
-    private void watchSettings() {
-        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 23);
-        boolean enabled = prefs().getBoolean("watch", true);
-        new AlertDialog.Builder(this).setTitle("Your Pixel Watch").setMessage("Install the matching watch APK, open Murmur on your phone and sign in, then open it on your watch.\n\nThe watch uses the phone's Tailscale connection. It has its own ‘Watch chat’ per agent. Approvals and rich content open on your phone. The phone must be reachable.\n\nWatch access is " + (enabled ? "on." : "off."))
-                .setPositiveButton(enabled ? "Turn access off" : "Turn access on", (d,w) -> prefs().edit().putBoolean("watch", !enabled).apply()).setNegativeButton("Done", null).show();
-    }
-    private void diagnose() {
-        String cookie = CookieManager.getInstance().getCookie(endpoint.origin);
-        ConnectivityManager cm = (ConnectivityManager)getSystemService(CONNECTIVITY_SERVICE);
-        NetworkCapabilities nc = cm.getNetworkCapabilities(cm.getActiveNetwork());
-        String network = nc != null && nc.hasTransport(NetworkCapabilities.TRANSPORT_VPN) ? "Android reports an active VPN." : "Android doesn't report an active VPN. Check Tailscale if you're away from home.";
-        toast("Checking your server…");
-        Endpoint target = endpoint;
-        io.execute(() -> {
-            String message;
-            try (MurmurApi api = new MurmurApi(target, cookie)) {
-                org.json.JSONObject session = api.get("/murmur/session");
-                message = session.optBoolean("signedIn") ? "Murmur is reachable and signed in." : "Murmur is reachable. Finish signing in on the phone.";
-            } catch (Exception ex) { message = ex.getMessage(); }
-            String result = message;
-            runOnUiThread(() -> { if (!isFinishing() && !isDestroyed()) new AlertDialog.Builder(this).setTitle("Connection check").setMessage(result + "\n\n" + network + "\n\n" + target.origin).setPositiveButton("Done", null).show(); });
-        });
-    }
-    private void showFailure(String title, String detail) {
-        if (frame == null || frame.getChildCount() > 1) return;
-        LinearLayout error = new LinearLayout(this); error.setOrientation(LinearLayout.VERTICAL); error.setGravity(Gravity.CENTER_VERTICAL); error.setPadding(dp(28), dp(24), dp(28), dp(24)); error.setBackgroundColor(PAPER);
-        error.addView(text(title, 28, INK, true)); gap(error, 12); error.addView(text(detail, 16, MUTED, false));
-        error.addView(button("Try again", true, () -> { if (web == null) showWeb(null); else { frame.removeView(error); web.loadUrl(endpoint.origin); } }));
-        error.addView(button("Open Tailscale", false, this::openTailscale)); error.addView(button("Connection settings", false, this::showConnection));
-        frame.addView(error, new FrameLayout.LayoutParams(-1, -1));
-    }
-    private void openTailscale() {
-        Intent launch = getPackageManager().getLaunchIntentForPackage("com.tailscale.ipn");
-        if (launch != null) startActivity(launch); else openExternal("https://play.google.com/store/apps/details?id=com.tailscale.ipn");
-    }
-    private void openExternal(String url) {
-        Uri uri = Uri.parse(url);
-        if (!Arrays.asList("https", "http", "mailto", "tel").contains(uri.getScheme())) return;
-        try { startActivity(new Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE)); } catch (ActivityNotFoundException ex) { toast("No app can open that link."); }
-    }
-    private void forget() {
-        prefs().edit().clear().apply();
-        getSharedPreferences("watch_receipts", MODE_PRIVATE).edit().clear().apply();
-        if (web != null) { web.clearCache(true); web.clearHistory(); }
-        WebStorage.getInstance().deleteAllData();
-        CookieManager.getInstance().removeAllCookies(done -> { CookieManager.getInstance().flush(); endpoint = null; showConnection(); });
-    }
-    private void toast(String message) { Toast.makeText(this, message, Toast.LENGTH_LONG).show(); }
-    @Override protected void onActivityResult(int request, int result, Intent data) {
-        super.onActivityResult(request, result, data);
-        if (request == 20 && fileCallback != null) { fileCallback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result, data)); fileCallback = null; }
-        if (request == 22 && result == RESULT_OK && data != null && data.getData() != null && downloadUrl != null) {
-            Uri destination = data.getData(); String source = downloadUrl, cookies = downloadCookies; downloadUrl = null; downloadCookies = null;
-            toast("Saving your file…"); io.execute(() -> saveDownload(source, cookies, destination));
+    private String shownRequests="";
+    private void updateRequests(NativeChat chat){
+        String signature=chat.storedId+":"+chat.requests.toString()+":"+store.online;
+        if(requestBox==null||signature.equals(shownRequests)&&requestBox.getChildCount()>0)return;shownRequests=signature;requestBox.removeAllViews();
+        if(chat.requests.isEmpty())return;
+        Map.Entry<String,JSONObject> entry=chat.requests.entrySet().iterator().next();String id=entry.getKey();JSONObject request=entry.getValue(),params=request.optJSONObject("params");if(params==null)return;
+        LinearLayout card=column(this);card.setBackground(shape(this,SOFT,20));pad(card,16,12,12);LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,-2);cp.setMargins(d(16),0,d(16),d(4));requestBox.addView(card,cp);
+        TextView count=text(this,"NEEDS YOU"+(chat.requests.size()>1?" · "+chat.requests.size()+" requests":""),10,PURPLE,true);card.addView(count);
+        if("approval".equals(request.optString("method"))){
+            TextView summary=text(this,params.optString("description","Your agent is asking for permission."),14,INK,true);summary.setMaxLines(3);card.addView(summary);
+            if(!params.optString("command").isBlank()){TextView command=text(this,params.optString("command"),11,MUTED,false);command.setMaxLines(2);command.setEllipsize(TextUtils.TruncateAt.END);card.addView(command);}
+            LinearLayout actions=row(this);card.addView(actions);JSONArray choices=params.optJSONArray("choices");boolean allow=choices==null||choices.toString().contains("\"once\""),deny=choices==null||choices.toString().contains("\"deny\"");
+            if(deny){Button no=button(this,"Don't allow",false,()->answerApproval(id,"deny"));no.setEnabled(store.online);actions.addView(no,new LinearLayout.LayoutParams(0,d(48),1));}
+            if(allow){Button yes=button(this,"Allow once",true,()->confirmApproval(id));yes.setEnabled(store.online);LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(0,d(48),1);bp.leftMargin=d(8);actions.addView(yes,bp);}
+            card.setOnClickListener(v->approvalDetails(id));
+        }else{
+            JSONArray questions=params.optJSONArray("questions");String question=questions!=null&&questions.length()>0?questions.optJSONObject(0).optString("question","Your agent has a question."):"Your agent has a question.";TextView text=text(this,question,14,INK,true);text.setMaxLines(3);card.addView(text);Button answer=button(this,"Answer"+(questions!=null&&questions.length()>1?" "+questions.length()+" questions":""),true,()->answerQuestions(id,paramsFor(id)));answer.setEnabled(store.online);card.addView(answer,new LinearLayout.LayoutParams(-1,d(48)));
         }
     }
-    private void saveDownload(String source, String cookies, Uri destination) {
-        OkHttpClient client = new OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).callTimeout(5, TimeUnit.MINUTES).build();
-        try (Response response = client.newCall(new Request.Builder().url(source).header("Cookie", cookies == null ? "" : cookies).build()).execute()) {
-            if (!response.isSuccessful() || response.body() == null) throw new IOException("Download unavailable. Reopen it in Murmur.");
-            try (InputStream input = response.body().byteStream(); OutputStream output = getContentResolver().openOutputStream(destination)) {
-                if (output == null) throw new IOException("Can't save to this location.");
-                byte[] bytes = new byte[8192]; int count; while ((count = input.read(bytes)) != -1) output.write(bytes, 0, count);
-            }
-            runOnUiThread(() -> toast("File saved."));
-        } catch (Exception ex) { runOnUiThread(() -> toast("Couldn't save the file. " + ex.getMessage())); }
-        finally { client.connectionPool().evictAll(); client.dispatcher().executorService().shutdown(); }
+    private JSONObject paramsFor(String id){JSONObject request=store.chat==null?null:store.chat.requests.get(id);return request==null?new JSONObject():request.optJSONObject("params");}
+    private void answerApproval(String id,String choice){try{store.answer(id,new JSONObject().put("choice",choice));}catch(Exception ex){toast(ex.getMessage());}}
+    private void approvalDetails(String id){JSONObject p=paramsFor(id);new AlertDialog.Builder(this).setTitle("Permission request").setMessage(p.optString("description")+"\n\n"+p.optString("command")).setPositiveButton("Done",null).show();}
+    private void confirmApproval(String id){JSONObject p=paramsFor(id);new AlertDialog.Builder(this).setTitle("Allow this action once?").setMessage(p.optString("description")+"\n\n"+p.optString("command")).setPositiveButton("Allow once",(dialog,w)->answerApproval(id,"once")).setNegativeButton("Cancel",null).show();}
+    private void answerQuestions(String id,JSONObject params){
+        JSONArray questions=params==null?null:params.optJSONArray("questions");if(questions==null)return;
+        ScrollView scroll=new ScrollView(this);LinearLayout form=column(this);pad(form,24,8,8);scroll.addView(form);Map<String,EditText> values=new LinkedHashMap<>();
+        for(int i=0;i<questions.length();i++){JSONObject q=questions.optJSONObject(i);if(q==null)continue;form.addView(text(this,q.optString("question"),16,INK,true));EditText value=new EditText(this);value.setTextSize(15);value.setHint("Your answer");values.put(q.optString("qid"),value);form.addView(value,new LinearLayout.LayoutParams(-1,-2));JSONArray choices=q.optJSONArray("choices");if(choices!=null)for(int j=0;j<choices.length();j++){String choice=choices.optString(j);TextView option=text(this,"＋ "+choice,14,PURPLE,false);pad(option,8,10,10);option.setBackground(ripple(this,Color.TRANSPARENT,12));option.setOnClickListener(v->value.setText(q.optBoolean("multi_select")&&!value.getText().toString().isBlank()?value.getText()+", "+choice:choice));form.addView(option);}space(form,20);}
+        new AlertDialog.Builder(this).setTitle("Your agent needs you").setView(scroll).setPositiveButton("Send answers",(dialog,w)->{try{JSONObject answers=new JSONObject();for(Map.Entry<String,EditText> e:values.entrySet())answers.put(e.getKey(),e.getValue().getText().toString().isBlank()?JSONObject.NULL:e.getValue().getText().toString());store.answer(id,new JSONObject().put("answers",answers).put("outcome","submitted"));}catch(Exception ex){toast(ex.getMessage());}}).setNegativeButton("Later",null).show();
     }
-    private void handleBack() { if (!showingConnection && web != null && web.canGoBack()) web.goBack(); else if (showingConnection && endpoint != null) showWeb(null); else finish(); }
-    @Override protected void onSaveInstanceState(Bundle out) { super.onSaveInstanceState(out); if (web != null) { Bundle state = new Bundle(); web.saveState(state); out.putBundle("web", state); } }
-    @Override protected void onPause() { super.onPause(); if (web != null) web.onPause(); CookieManager.getInstance().flush(); }
-    @Override protected void onResume() { super.onResume(); if (web != null) web.onResume(); }
-    @Override protected void onDestroy() { if (microphone != null) microphone.deny(); if (fileCallback != null) fileCallback.onReceiveValue(null); if (web != null) web.destroy(); io.shutdown(); super.onDestroy(); }
+    private void chooseNewChat(){if(store.agents.isEmpty()){connectionActions();return;}if(store.selected==null||store.tab.equals("agents")){String[] labels=store.agents.stream().map(a->a.name+" · "+a.home).toArray(String[]::new);new AlertDialog.Builder(this).setTitle("Talk to…").setItems(labels,(dialog,w)->{store.selected=store.agents.get(w);store.tab="chats";store.newChat();}).show();}else store.newChat();}
+    private void menu(){
+        boolean chat=store.chat!=null;String[] items=chat?new String[]{"Reconnect & sync","Rename conversation","Copy conversation","Full Murmur workspace","Connection & sign-in"}:new String[]{"Refresh","Full Murmur workspace","Connection & sign-in"};
+        new AlertDialog.Builder(this).setItems(items,(dialog,which)->{if(chat)switch(which){case 0->store.reconnect();case 1->rename();case 2->copyConversation();case 3->workspace();case 4->connectionActions();}else switch(which){case 0->{if(store.tab.equals("agents"))store.refresh();else store.loadChats();}case 1->workspace();case 2->connectionActions();}}).show();
+    }
+    private void rename(){NativeChat chat=store.chat;if(chat==null)return;EditText field=new EditText(this);field.setText(chat.title);field.setSingleLine();new AlertDialog.Builder(this).setTitle("Rename conversation").setView(field).setPositiveButton("Save",(dialog,w)->store.rename(field.getText().toString().trim())).setNegativeButton("Cancel",null).show();}
+    private void connectionActions(){new AlertDialog.Builder(this).setTitle("Your connection").setMessage(store.error.isBlank()?store.connection:store.error).setPositiveButton("Reconnect",(dialog,w)->store.reconnect()).setNeutralButton("Sign in / Workspace",(dialog,w)->workspace()).setNegativeButton("Tailscale",(dialog,w)->tailscale()).show();}
+    private void buildSettings(){
+        title.setText("Make yourself at home.");subtitle.setText("Murmur Companion · 0.2.0 native preview");ScrollView scroll=new ScrollView(this);body.addView(scroll);LinearLayout page=column(this);pad(page,20,14,24);scroll.addView(page);
+        page.addView(text(this,"YOUR CONNECTION",11,PURPLE,true));space(page,12);
+        setting(page,"Murmur server",prefs().getString("origin","Your private server"),this::connectionActions);
+        setting(page,"Tailscale","Use your phone's private connection",this::tailscale);
+        setting(page,"Pixel Watch","Paired phone relay · Native watch companion",this::watchSettings);space(page,24);
+        page.addView(text(this,"YOUR WORKSPACE",11,PURPLE,true));space(page,12);
+        setting(page,"Full Murmur workspace","Groups, models, memories, routines, files and integrations",this::workspace);
+        setting(page,"Native conversations","Android lists, live replies, dictation, approval cards and saved drafts",()->new AlertDialog.Builder(this).setTitle("Native, where you talk").setMessage("Conversations are Android views, with a live connection directly to your server. The last conversations stay in memory while you navigate. Drafts stay in app-private storage. The full workspace and sign-in use the optional web screen.\n\nThis preview does not yet render all rich tool content or support file attachments in native chat. Use Workspace for those features.").setPositiveButton("Done",null).show());space(page,24);
+        setting(page,"Change server","Connect to another Murmur",this::showConnection);
+        setting(page,"Forget this device","Remove saved connection, sign-in and drafts",this::forget);
+        space(page,24);page.addView(text(this,"Independent, open source. Made for Murmur by Umbrel.\nNo added analytics or hosted chat relay.",12,MUTED,false));
+    }
+    private void setting(LinearLayout parent,String name,String detail,Runnable click){LinearLayout row=row(this);pad(row,16,16,16);row.setBackground(ripple(this,CARD,20));LinearLayout copy=column(this);copy.addView(text(this,name,16,INK,true));space(copy,4);copy.addView(text(this,detail,12,MUTED,false));row.addView(copy,new LinearLayout.LayoutParams(0,-2,1));row.addView(new Glyph(this,"chevron"),new LinearLayout.LayoutParams(d(24),d(32)));row.setOnClickListener(v->click.run());row.setFocusable(true);LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=d(8);parent.addView(row,p);}
+    private void watchSettings(){if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},23);boolean enabled=prefs().getBoolean("watch",true);new AlertDialog.Builder(this).setTitle("Your Pixel Watch").setMessage("Install both APKs from the same release and sign in on your phone. The watch uses your phone's connection and has a separate Watch chat per agent.\n\nAccess is "+(enabled?"on.":"off.")).setPositiveButton(enabled?"Turn access off":"Turn access on",(dialog,w)->prefs().edit().putBoolean("watch",!enabled).apply()).setNegativeButton("Done",null).show();}
+    private void workspace(){rememberDraft();startActivity(new Intent(this,WorkspaceActivity.class));}
+    private void tailscale(){Intent intent=getPackageManager().getLaunchIntentForPackage("com.tailscale.ipn");if(intent==null)intent=new Intent(Intent.ACTION_VIEW,android.net.Uri.parse("https://play.google.com/store/apps/details?id=com.tailscale.ipn"));try{startActivity(intent);}catch(ActivityNotFoundException ex){toast("Install Tailscale on your phone first.");}}
+    private void forget(){new AlertDialog.Builder(this).setTitle("Forget this device?").setMessage("Remove sign-in, saved connection and drafts on this phone. Server conversations remain.").setPositiveButton("Forget",(dialog,w)->{prefs().edit().clear().apply();getSharedPreferences("drafts",0).edit().clear().apply();getSharedPreferences("watch_receipts",0).edit().clear().apply();WebStorage.getInstance().deleteAllData();android.webkit.WebView cacheCleaner=new android.webkit.WebView(this);cacheCleaner.clearCache(true);cacheCleaner.destroy();CookieManager.getInstance().removeAllCookies(done->{CookieManager.getInstance().flush();endpoint=null;store.reset();input=null;composerChat=null;showConnection();});}).setNegativeButton("Cancel",null).show();}
+    private void dictate(){Intent intent=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM).putExtra(RecognizerIntent.EXTRA_PROMPT,"Message your agent");try{startActivityForResult(intent,40);}catch(ActivityNotFoundException ex){toast("No dictation service is installed. Use your keyboard's microphone or type a message.");}}
+    @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(request==40&&result==RESULT_OK&&data!=null&&input!=null){ArrayList<String> words=data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);if(words!=null&&!words.isEmpty()){String before=input.getText().toString();input.setText(before+(before.isBlank()?"":" ")+words.get(0));input.setSelection(input.length());input.requestFocus();}}}
+    private void copyConversation(){if(store.chat==null)return;StringBuilder text=new StringBuilder();for(NativeChat.Row r:store.chat.rows)text.append(r.role.equals("user")?"You":"Agent").append(":\n").append(r.text).append("\n\n");copy(text.toString());}
+    private void copy(String text){((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("Murmur",text));toast("Copied");}
+    private void toast(String message){Toast.makeText(this,message,Toast.LENGTH_SHORT).show();}
+    private String draftKey(NativeChat c){return prefs().getString("origin","")+":"+c.hermes+":"+c.profile+":"+c.storedId;}
+    private void rememberDraft(){if(input==null||store==null)return;NativeChat c=composerChat;if(c==null)return;String value=input.getText().toString();store.drafts.put(c.key(),value);getSharedPreferences("drafts",0).edit().putString(draftKey(c),value).apply();}
+    private TextWatcher watcher(java.util.function.Consumer<String> change){return new TextWatcher(){public void beforeTextChanged(CharSequence s,int start,int count,int after){}public void onTextChanged(CharSequence s,int start,int before,int count){change.accept(s.toString());}public void afterTextChanged(Editable e){}};}
+    @Override protected void onStart(){super.onStart();if(store!=null)store.foreground(true);}
+    @Override protected void onResume(){super.onResume();if(surface.equals("native")){try{endpoint=new Endpoint(prefs().getString("origin",""),prefs().getBoolean("http",false));configure();}catch(IllegalArgumentException ex){endpoint=null;store.reset();showConnection();}}}
+    @Override protected void onStop(){rememberDraft();if(store!=null&&!isChangingConfigurations())store.foreground(false);super.onStop();}
+    @Override protected void onSaveInstanceState(Bundle out){rememberDraft();out.putString("query",query);super.onSaveInstanceState(out);}
+    @Override protected void onDestroy(){if(store!=null)store.observer=null;main.removeCallbacksAndMessages(null);super.onDestroy();}
+    private record Item(String id,String role,String text,String detail){}
+    private class NativeAdapter extends RecyclerView.Adapter<Holder>{
+        List<Item> items=new ArrayList<>();
+        NativeAdapter(){setHasStableIds(false);}
+        void submit(List<Item> next,Runnable done){List<Item> before=items;DiffUtil.DiffResult diff=DiffUtil.calculateDiff(new DiffUtil.Callback(){public int getOldListSize(){return before.size();}public int getNewListSize(){return next.size();}public boolean areItemsTheSame(int o,int n){return before.get(o).id.equals(next.get(n).id);}public boolean areContentsTheSame(int o,int n){return before.get(o).equals(next.get(n));}});items=next;diff.dispatchUpdatesTo(this);if(done!=null)done.run();}
+        @Override public int getItemViewType(int pos){return switch(items.get(pos).role){case "user"->1;case "assistant","notice"->2;case "agent","chat"->3;default->4;};}
+        @Override public Holder onCreateViewHolder(ViewGroup parent,int type){
+            LinearLayout outer=column(MainActivity.this);outer.setLayoutParams(new RecyclerView.LayoutParams(-1,-2));pad(outer,4,6,6);
+            LinearLayout card=column(MainActivity.this);pad(card,16,type==3?18:14,type==3?18:14);outer.addView(card,new LinearLayout.LayoutParams(-1,-2));
+            TextView label=text(MainActivity.this,"",10,MUTED,true),primary=text(MainActivity.this,"",type==3?17:16,INK,type==3),secondary=text(MainActivity.this,"",12,MUTED,false);
+            card.addView(label);card.addView(primary,new LinearLayout.LayoutParams(-1,-2));card.addView(secondary);return new Holder(outer,card,label,primary,secondary,type);
+        }
+        @Override public void onBindViewHolder(Holder h,int position){Item item=items.get(position);h.label.setVisibility(View.GONE);h.secondary.setVisibility(View.GONE);h.primary.setTypeface(Typeface.create(h.type==3?"sans-serif-medium":"sans-serif",Typeface.NORMAL));
+            LinearLayout.LayoutParams lp=(LinearLayout.LayoutParams)h.card.getLayoutParams();lp.leftMargin=h.type==1?d(38):0;lp.rightMargin=h.type==1?0:h.type==2?d(12):0;h.card.setLayoutParams(lp);
+            if(h.type==1||h.type==2){
+                h.card.setBackground(shape(MainActivity.this,h.type==1?SOFT:Color.TRANSPARENT,22));h.label.setVisibility(View.VISIBLE);h.label.setText(item.role.equals("user")?"YOU":item.role.equals("notice")?"CONNECTION NOTE":store.selected==null?"YOUR AGENT":store.selected.name.toUpperCase(Locale.ROOT));h.label.setTextColor(item.role.equals("notice")?RED:MUTED);h.label.setPadding(0,0,0,d(7));
+                h.primary.setText(item.role.equals("assistant")?markdown(item.text):item.text);h.primary.setTextIsSelectable(true);h.primary.setLinksClickable(true);h.primary.setMovementMethod(LinkMovementMethod.getInstance());h.primary.setLineSpacing(d(5),1);h.primary.setOnLongClickListener(v->{copy(item.text);return true;});
+                h.card.setOnClickListener(null);if(item.detail.equals("streaming")){h.secondary.setText("●  Replying");h.secondary.setTextColor(PURPLE);h.secondary.setVisibility(View.VISIBLE);}
+            }else if(h.type==3){
+                h.primary.setTextIsSelectable(false);h.primary.setMaxLines(1);h.primary.setEllipsize(TextUtils.TruncateAt.END);h.primary.setText(item.text);h.secondary.setText(item.detail);h.secondary.setTextColor(MUTED);h.secondary.setMaxLines(2);h.secondary.setEllipsize(TextUtils.TruncateAt.END);h.secondary.setVisibility(View.VISIBLE);h.secondary.setPadding(0,d(5),0,0);h.card.setBackground(ripple(MainActivity.this,CARD,22));
+                h.card.setOnClickListener(v->{query="";if(item.role.equals("agent")){for(NativeStore.Agent a:store.agents)if(item.id.equals("agent:"+a.key())){store.select(a);break;}}else store.open(item.id,item.text);});h.card.setFocusable(true);
+            }else{
+                h.card.setBackground(shape(MainActivity.this,SOFT,26));pad(h.card,24,34,34);h.primary.setText(item.text);h.primary.setTextSize(25);h.primary.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));h.secondary.setText(item.detail);h.secondary.setVisibility(View.VISIBLE);h.secondary.setPadding(0,d(14),0,0);h.card.setOnClickListener(null);if(item.role.equals("empty")&&store.agents.isEmpty()&&!store.loading){h.card.setBackground(ripple(MainActivity.this,SOFT,26));h.secondary.setText("Tap to sign in or set up your Murmur workspace.");h.card.setOnClickListener(v->workspace());}
+            }
+        }
+        @Override public int getItemCount(){return items.size();}
+    }
+    private static class Holder extends RecyclerView.ViewHolder{
+        final LinearLayout card;final TextView label,primary,secondary;final int type;
+        Holder(View outer,LinearLayout card,TextView label,TextView primary,TextView secondary,int type){super(outer);this.card=card;this.label=label;this.primary=primary;this.secondary=secondary;this.type=type;}
+    }
 }

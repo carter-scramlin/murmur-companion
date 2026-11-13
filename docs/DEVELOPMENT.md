@@ -1,4 +1,16 @@
-# Development
+# Native Android architecture (0.2.0)
+
+- `MainActivity`: native Chats, Agents and Settings screens, RecyclerView transcript, composer, Android dictation, draft persistence, approval confirmations and clarification forms. Native conversation screens do not instantiate a WebView.
+- `NativeStore`: Android ViewModel retains selected agent/chat, cached lists, ten recent transcripts, drafts and the transport across configuration changes. A serial executor owns network operations; the main thread owns UI state. Sockets close after 20 seconds in the background and resume read-only on return.
+- `core/NativeChat`: pure Java snapshot/event reducer, hidden-row filtering, runtime/stored session identity, stream offset/sequence deduplication and gap detection. A gap requests an authoritative resume; prompts are never replayed.
+- `core/MurmurApi`: authenticated HTTP and persistent JSON-RPC sockets. Events and server requests are opt-in listeners; direct replies to server requests require a user action. Watch callers retain their narrow interface.
+- `WorkspaceActivity`: the explicit full-workspace and sign-in screen, containing the former WebView shell and native device integrations. This preserves advanced server features while native chat is developed.
+
+Native phone RPC methods: `profiles.list`, `session.list`, `session.create`, `session.resume`, `prompt.submit`, `session.interrupt`, `session.title`, `client.capabilities`; approval/question answers respond to the original server request ID. Legacy pending approvals use `approval.respond`. Unsupported renderer requests return an explicit unsupported error and require the full workspace.
+
+Phone draft keys include server origin, Hermes, profile and stored chat ID. Drafts persist only in app-private preferences; transcripts are memory-only and bounded to 500 rows per snapshot, ten cached chats. No offline prompt queue exists. Native chat supports basic Markdown, not the complete rich renderer.
+
+Tests include direct native HTTP/WebSocket fixture integration, exactly one submission from a Send tap, Activity recreation with draft retention, approval confirmation without implicit permission, stream deduplication/gap behavior, watch contracts and endpoint policy. Use JDK 17 and run the Gradle checks below.
 
 ## Build
 
@@ -12,11 +24,11 @@ The first build resolves dependencies from Google Maven and Maven Central. All a
 
 ## Structure and boundaries
 
-- `phone/MainActivity`: native onboarding, saved origin, WebView lifecycle, navigation, mic permissions, Android file picking/saving, handoff permission and diagnostics.
+- `phone/WorkspaceActivity`: explicit web workspace lifecycle, microphone permissions, Android file picking/saving, and sign-in.
 - `phone/WatchRelayService`: exported WearableListenerService filtered to `/murmur/v1/request`. Play services restricts Data Layer exchange to applications with the same package name and signing key. No HTTP listener is opened on the phone.
 - `wear/WatchActivity`: foreground-only Data Layer message client, request ID and source-node correlation, round-screen layout, crown scrolling, system dictation and keyboard entry. No server cookie or Hermes key is sent to the watch.
 - `core/Endpoint`: origin validation and explicit private-HTTP policy. No credentials, paths, queries or fragments are accepted as a server address.
-- `core/MurmurApi`: authenticated HTTP and WebSocket calls to one saved Murmur origin. HTTP redirects are refused. RPC responses are correlated by numeric ID. Server requests are left unanswered for the full Murmur client.
+- `core/MurmurApi`: authenticated HTTP and WebSocket calls to one saved Murmur origin. HTTP redirects are refused. RPC responses are correlated by numeric ID. Native phone listeners support explicit server-request answers; watch callers do not answer them.
 - `core/WatchActions`: explicit watch operations. Reads never create a chat. A send finds or creates the exact `Watch chat` title in the chosen profile, resumes using the stored ID and submits against the returned runtime ID. Existing busy or waiting chats reject another prompt.
 
 ## Watch protocol
@@ -43,4 +55,4 @@ For visual smoke checks, install the APK in an Android emulator. Onboarding and 
 
 ## GitHub setup
 
-The public project repository is `carter-scramlin/murmur-companion`. The download website lives in `website/`; see [website development and deployment](WEBSITE.md). The Pages workflow builds a matching preview APK pair, packages it and publishes the static site. The separate CI and manual signed-preview workflows provide downloadable artifacts. They do not automatically publish a Play Store listing.
+The public project repository is `carter-scramlin/murmur-companion`. The download website lives in `website/`; see [website development and deployment](WEBSITE.md). The Pages workflow deploys the static site. The preview release workflow builds, verifies and publishes the matching APK pair; website download buttons use those fixed assets. The separate CI and manual signed-preview workflows provide downloadable artifacts. They do not automatically publish a Play Store listing.

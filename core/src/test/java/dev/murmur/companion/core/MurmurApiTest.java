@@ -125,6 +125,30 @@ public class MurmurApiTest {
             assertEquals("first", a.get(5, TimeUnit.SECONDS).getString("value")); assertEquals("second", b.get(5, TimeUnit.SECONDS).getString("value"));
         } finally { executor.shutdownNow(); }
     }
+    @Test public void nativeSocketDeliversEventsAndExplicitServerRequestAnswers() throws Exception {
+        BlockingQueue<JSONObject> events = new LinkedBlockingQueue<>(), requests = new LinkedBlockingQueue<>(), answers = new LinkedBlockingQueue<>();
+        server.enqueue(new MockResponse().withWebSocketUpgrade(new WebSocketListener() {
+            @Override public void onClosing(WebSocket socket,int code,String reason){socket.close(code,reason);}
+            @Override public void onMessage(WebSocket socket,String text){try{
+                JSONObject frame=new JSONObject(text);
+                if(frame.has("result")){answers.add(frame);return;}
+                socket.send(new JSONObject().put("id",frame.get("id")).put("result",new JSONObject().put("ok",true)).toString());
+                socket.send(new JSONObject().put("method","event").put("params",new JSONObject().put("type","message.delta").put("session_id","runtime").put("payload",new JSONObject().put("text","Live reply"))).toString());
+                socket.send(new JSONObject().put("id","permission").put("method","approval").put("params",new JSONObject().put("session_id","runtime").put("choices",new JSONArray().put("once").put("deny"))).toString());
+            }catch(Exception ex){throw new AssertionError(ex);}}
+        }));
+        try(MurmurApi.Rpc rpc=api.connect("home",new MurmurApi.Listener(){
+            @Override public void onEvent(JSONObject event){events.add(event);}
+            @Override public void onRequest(JSONObject request){requests.add(request);}
+        })){
+            assertTrue(rpc.call("session.resume",new JSONObject()).getBoolean("ok"));
+            assertEquals("Live reply",events.poll(3,TimeUnit.SECONDS).getJSONObject("payload").getString("text"));
+            JSONObject request=requests.poll(3,TimeUnit.SECONDS);assertEquals("approval",request.getString("method"));
+            assertNull(answers.poll(100,TimeUnit.MILLISECONDS));
+            rpc.respond(request.get("id"),new JSONObject().put("choice","deny"));
+            JSONObject reply=answers.poll(3,TimeUnit.SECONDS);assertEquals("permission",reply.getString("id"));assertEquals("deny",reply.getJSONObject("result").getString("choice"));
+        }
+    }
     private JSONObject request(String action) throws Exception { return new JSONObject().put("action", action).put("hermes", "main").put("profile", "default"); }
     interface Reply { JSONObject result(String method, JSONObject params) throws Exception; }
     private void socket(Reply reply) {

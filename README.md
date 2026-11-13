@@ -18,9 +18,15 @@
 
 ### A familiar home for your agents
 
-The phone app presents **your server's actual Murmur interface** inside a native Android shell. Your agents, chats, groups, models, memories, routines, tools and settings stay where they already live. Server interface updates arrive when your Murmur server updates.
+**Version 0.2.0 makes everyday chat native Android.** Choose an agent, open a conversation and talk using Android lists, a native composer and streamed text replies. No webpage is created for those screens.
 
-Around it: a calm connection screen, persistent sign-in, Android file picking and saving, microphone permission handling, connection diagnostics, Tailscale access and modern back navigation. The shell follows Murmur's cream, ink and violet palette; the connected interface follows your Murmur theme.
+Conversations and connections stay in memory as you navigate. Replies update directly over a persistent WebSocket. Dictate into a draft, review before sending, stop a response, rename chats, copy text, and answer approvals or clarification questions using native controls. Drafts survive navigation and Android Activity recreation.
+
+The explicit **Full Murmur workspace** remains available for sign-in, groups, models, memories, routines, integrations, attachments and rich tool content. Those advanced screens still use your server's web interface. [See exactly what is native →](docs/FEATURES.md)
+
+<p align="center"><img src="docs/images/phone-native-chats.png" width="230" alt="Native Android conversation list" /> &nbsp; <img src="docs/images/phone-native-chat.png" width="230" alt="Native Android streamed conversation and composer" /> &nbsp; <img src="docs/images/phone-native-approval.png" width="230" alt="Native one-time approval card" /></p>
+
+<p align="center"><sub>Android runtime renders using test fixtures. These are native views, not browser screenshots.</sub></p>
 
 ### Less on your wrist. Enough to be useful.
 
@@ -43,9 +49,9 @@ Pixel Watch  ← Wear OS Data Layer →  Android phone  ← Tailscale →  Murmu
 
 ### Install the first build
 
-**Preview release: 0.1.0.** Android 9+ on the phone; Wear OS 3+ on a paired watch. Pixel Watch is the intended watch form factor. Google Play services is required on both devices for the watch connection.
+**Preview release: 0.2.0.** Android 9+ on the phone; Wear OS 3+ on a paired watch. Pixel Watch is the intended watch form factor. Google Play services is required on both devices for the watch connection.
 
-**[Download the phone + watch APK bundle →](https://github.com/carter-scramlin/murmur-companion/releases/download/v0.1.0/murmur-companion-0.1.0-debug.zip)** No build tools needed. Individual APKs, installation instructions and checksums are under [Releases](https://github.com/carter-scramlin/murmur-companion/releases/tag/v0.1.0). Install the phone APK on Android, then install the matching watch APK using the wireless ADB steps in the guide.
+**[Download the phone + watch APK bundle →](https://github.com/carter-scramlin/murmur-companion/releases/download/v0.2.0/murmur-companion-0.2.0-debug.zip)** No build tools needed. Individual APKs, installation instructions and checksums are under [Releases](https://github.com/carter-scramlin/murmur-companion/releases/tag/v0.2.0). Install the phone APK on Android, then install the matching watch APK using the wireless ADB steps in the guide.
 
 To build from source, build both APKs together so they share the same signing certificate:
 
@@ -59,7 +65,7 @@ Install `phone/build/outputs/apk/debug/phone-debug.apk` on the phone and `wear/b
 
 ### What is ready, and what needs device validation
 
-This is a buildable first version, not a Play Store release or an official Umbrel product. The phone preserves the server's feature surface, but **complete desktop/browser parity is not yet verified**. Android WebView does not support Web Push; some OAuth providers reject embedded sign-in; blob downloads and browser-specific media features need further integration. Open those flows in a supported browser. See the [coverage matrix](docs/FEATURES.md) before installing.
+This is a native preview, not a Play Store release or an official Umbrel product. **Complete native desktop/browser parity is not yet implemented**. Advanced features remain accessible through Full Murmur workspace. Android WebView does not support Web Push; some OAuth providers reject embedded sign-in; blob downloads and browser-specific media features need further integration. Open those flows in a supported browser. See the [coverage matrix](docs/FEATURES.md) before installing.
 
 Automated tests exercise origin validation, private HTTP opt-in, authenticated requests, redirect refusal, out-of-order RPC responses, bounded watch transcripts, safe read-only behavior and one-time prompt submission. Android lint and APK builds are part of CI. [Validation details and the device checklist](docs/VALIDATION.md) distinguish checks actually run from hardware checks still needed.
 
@@ -77,7 +83,7 @@ The Google Data Layer transport and the selected keyboard or speech recognizer h
 
 | Module | Purpose |
 |---|---|
-| `phone` | Android connection setup, Murmur WebView, device integrations and watch relay |
+| `phone` | Native Android conversations, retained state and streaming, explicit workspace/sign-in fallback and watch relay |
 | `wear` | Native round-screen conversation UI, voice/keyboard input and crown scrolling |
 | `core` | Endpoint policy, Murmur HTTP/WebSocket client and watch actions, with JVM tests |
 

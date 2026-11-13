@@ -1,38 +1,39 @@
 # Feature coverage
 
-The phone embeds the live mobile interface served by your Murmur installation. It does not fork or bundle Murmur's React frontend. A feature appearing in that interface is not the same as an end-to-end tested Android integration.
+Version 0.2.0 makes the everyday phone experience native Android. Agent lists, conversations, search, the message composer, streamed text replies, stop, rename, copy, dictation, one-time approvals and clarification forms are Android views. A WebView is not created for those screens.
 
-Status definitions: **Server UI** means the existing feature is presented by the server inside WebView; **Native** means this project implements the device integration; **Limited** means there is a known gap. Physical-device checks are still required. This preview does not claim verified full parity with the desktop/browser apps.
+The explicit **Full Murmur workspace** screen retains the server's interface for advanced features and sign-in. Native chat is not yet a complete replacement for every desktop feature. Physical-device validation is still required.
 
-| Feature | Phone | Wear OS |
+| Feature | Android phone | Wear OS |
 |---|---|---|
-| Agents, creation, editing, personalities | Server UI | Native selection from up to 8 Hermes connections / 60 agents |
-| Chats, history, search, rename, pin, archive | Server UI | One named Watch chat per agent; recent text only |
-| Streaming replies, plans, helpers and tool details | Server UI | Native refresh of busy Watch chat every 5 seconds while visible; no tool trace |
-| Groups and mentions | Server UI | Continue on phone |
-| Approvals and clarification questions | Server UI | Shows needs-attention status for Watch chat; answer on phone |
-| Models, provider configuration, reasoning, usage | Server UI | Uses the agent's configured model |
-| App integrations and sign-in | Server UI; embedded OAuth can be refused by providers | Continue on phone |
-| Memory, routines, goals, `/btw` | Server UI | Short messages only; advanced controls on phone |
-| More than one Hermes | Server UI | Agents labeled by Hermes home; no silent fallback to another Hermes |
-| WhatsApp, Telegram and Umbrel settings | Server UI | Continue on phone |
-| Photos and file uploads | Native Android picker for `<input type=file>` | Continue on phone |
-| Downloads | Native Save as for direct same-origin HTTP(S) downloads | Continue on phone |
-| Blob-generated export / cross-origin downloads | Limited; open in browser | Continue on phone |
-| Interactive widgets / inline media / browser previews | Server UI; browser capabilities and WebView compatibility apply | Text preview; continue on phone |
-| Phone microphone / Murmur voice | Native runtime permission for audio capture on saved HTTPS origin; Murmur handles backend audio | Native system dictation, with text review before sending |
-| Read-aloud / speech synthesis / calls | Server UI where compatible; WebView/browser APIs require device validation | Not implemented |
-| Desktop keyboard shortcuts, dock badges, local desktop-only OS hooks | Platform-specific; server's mobile controls instead | Not applicable |
-| Background Web Push | Limited: WebView has no Web Push integration here; use a supported browser/PWA for it | No proactive agent notifications; handoff reminder on phone only |
-| Light / dark themes | Server UI respects Murmur's setting; native connection shell is cream | Native black OLED-friendly interface |
-| Offline conversations | Not implemented; phone needs server, watch needs paired phone | Not implemented; no offline send queue |
-| Tailscale | Native app works with Android VPN routing; private HTTP opt-in and HTTPS support | Phone relay; no standalone watch VPN |
-| Home-screen widgets / watch tiles / complications | Not implemented | Not implemented |
+| Agent selection and multiple Hermes homes | Native; agents labeled by home | Native; up to 8 homes / 60 agents |
+| Agent creation, editing, personalities | Full workspace | Continue on phone |
+| Conversations, recent history, list search, create, rename | Native; up to 100 recent chats per agent and 500 transcript rows per snapshot | One named Watch chat per agent; bounded recent text |
+| Pin, archive, delete, older history | Full workspace | Continue on phone |
+| Streaming text replies | Native WebSocket events; in-memory transcript and connection retained across rotation | Foreground refresh every 5 seconds while busy |
+| Stop response | Native explicit interrupt | Continue on phone |
+| Approvals | Native Allow once / Don't allow for offered choices; action details and confirmation before allowing | Needs-you status; answer on phone |
+| Clarification questions | Native forms, choices and free-text answers | Continue on phone |
+| Tool steps, plans, helpers, rich results | Native live activity label; complete visualizations in Full workspace | Text only |
+| Text formatting, copy, links | Native basic Markdown spans, selectable text and copy | Text only |
+| Dictation | Android speech recognizer inserts a draft; tap Send to submit | Reviewed native dictation |
+| Files/photos, rich media, calls and read-aloud | Full workspace; native Android file picker/direct Save as and microphone permission there | Continue on phone |
+| Models, providers, reasoning, memory, routines, goals | Full workspace | Uses the agent's configured model |
+| Groups, app integrations, WhatsApp, Telegram and Umbrel setup | Full workspace | Continue on phone |
+| Saved drafts | App-private preferences plus in-memory drafts; retained on navigation/recreation | Activity restoration |
+| Offline access | Previously opened chat stays in memory during this process; reconnect to refresh/send. No offline send queue. | Needs reachable paired phone |
+| Tailscale | Normal Android VPN routing; HTTPS and explicit private HTTP option | Paired phone relay; no separate watch VPN |
+| Watch handoff | Reminder targets the selected agent's existing Watch chat in the native phone UI | Continue on phone |
+| Dark theme | Native phone screens currently light; workspace follows server theme | Native black interface |
+| Background Web Push | Not implemented; use a compatible browser/PWA | No proactive agent notifications |
+| Home widgets / watch tiles / complications | Not implemented | Not implemented |
 
-## Compatibility boundary
+## Connection and sign-in
 
-WebView and Chrome have separate cookies. Opening a provider flow externally does not automatically sign the embedded page in. Providers using server-side callbacks may finish after a page reload; others require a browser-only workflow or additional callback integration. The app does not weaken sign-in provider restrictions.
+Sign-in uses the explicit workspace screen and its app-private WebView cookie store. Native API calls and the watch relay reuse cookies only for the saved Murmur origin. Chrome has a separate cookie store. Some OAuth providers reject embedded sign-in; opening Chrome does not automatically sign in the app.
 
-Watch **Continue on phone** currently posts a notification that opens the app, not an exact-chat deep link. Find the agent's **Watch chat** in Murmur. The watch does not show every pending approval across every conversation and never auto-answers a server request.
+Native sockets are reused while active and released after the phone activity has been in the background for 20 seconds. Returning reconnects and resumes the chat from the server. Reconnect is read-only and never replays a prompt. If delivery is uncertain, read the chat before sending again.
 
-The phone's UI follows the installed server automatically. The watch uses explicit upstream JSON-RPC methods (`profiles.list`, `session.list`, `session.create`, `session.resume`, `prompt.submit`) through Murmur's `/hermes/api/ws` proxy and reads `/murmur/connections`. Upstream changes can require a client update. See [validation](VALIDATION.md) for the inspected source revision.
+Native chat handles approval and clarification server requests. Other renderer requests, such as secrets, setup cards and interactive browser actions, require Full workspace and are explicitly declined as unsupported by the native renderer. Reopen the workspace and ask the agent to continue there. Nothing is auto-approved. Large snapshots exceeding the transport limit need the full workspace.
+
+The explicit workspace retains the 0.1.0 WebView limitations: background Web Push is absent; some OAuth, blob exports and browser-specific media features need further integration. Direct same-origin HTTP(S) file saving is supported there.

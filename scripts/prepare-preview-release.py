@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify the debug APK pair and assemble the public 0.1.0 preview assets."""
+"""Verify the debug APK pair and assemble the public preview assets."""
 from pathlib import Path
 import hashlib
 import os
@@ -26,17 +26,18 @@ if len(set(certificates)) != 1:
     raise SystemExit('Phone and watch signing certificates differ. Refusing to package.')
 
 runpy.run_path(str(root / 'scripts' / 'prepare-website.py'), run_name='__main__')
-output = root / 'artifacts' / 'preview-release'
+version = re.search(r'versionName = "([^"]+)"', (root / 'phone' / 'build.gradle.kts').read_text()).group(1)
+output = root / 'artifacts' / f'preview-release-{version}'
 output.mkdir(parents=True, exist_ok=True)
 # Refuse to mix an old package with a freshly signed pair.
 if any(output.iterdir()):
     raise SystemExit('Preview release output directory must be empty before packaging.')
 for name in ('murmur-companion-phone-debug.apk', 'murmur-companion-wear-debug.apk',
-             'murmur-companion-0.1.0-debug.zip'):
+             f'murmur-companion-{version}-debug.zip'):
     shutil.copy2(root / 'website' / 'downloads' / name, output / name)
 shutil.copy2(root / 'docs' / 'INSTALL.md', output / 'INSTALL.md')
 (output / 'SIGNING-CERTIFICATE.txt').write_text(
-    'Murmur Companion 0.1.0 preview\n'
+    f'Murmur Companion {version} preview\n'
     'Both APKs are debug-signed with this public certificate SHA-256 digest:\n'
     + certificates[0] + '\n\n'
     'This fingerprint is public verification information, not a signing key.\n'

@@ -11,7 +11,7 @@ permissions:
   contents: write
 concurrency:
   group: release-v0.1.0
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   release:
     runs-on: ubuntu-latest

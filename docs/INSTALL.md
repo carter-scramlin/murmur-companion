@@ -8,11 +8,23 @@ This repository builds two separate apps: one for an Android phone and one for a
 - For the watch: a Pixel Watch or another round Wear OS 3+ watch already paired to that phone. The phone and watch need Google Play services.
 - A working Murmur installation. Open it in your phone's browser first. This is a Murmur client; a bare Hermes dashboard URL is not the correct address.
 - For remote access: Tailscale on the phone and the machine exposing Murmur, on the same tailnet. Follow [Tailscale setup](TAILSCALE.md).
-- A computer with Android Studio, or JDK 17 plus Android SDK Platform 36, Build Tools 36.0.0 and Platform Tools. Use the SDK Manager in Android Studio to install them. Gradle 9.3.1 is included through the wrapper and downloads itself.
+- To install on the watch: a computer with [Android SDK Platform Tools](https://developer.android.com/tools/releases/platform-tools) for the `adb` command. You do not need Android Studio, Java or Gradle when downloading the built APKs. Source builds optionally require JDK 17 and Android SDK 36.
 
 The current API integration was checked against Murmur source revision `27253d221302af4c2b76b95f993428d698322519` (package version 0.14.1). Older/newer servers may change the watch protocol. The upstream source was inspected, but a live server and physical Pixel Watch were not used for end-to-end verification. See [validation](VALIDATION.md).
 
-## 2. Build both apps
+## 2. Download both apps
+
+Open [Releases → v0.1.0](https://github.com/carter-scramlin/murmur-companion/releases/tag/v0.1.0) and expand **Assets**. Download `murmur-companion-0.1.0-debug.zip` and extract it. It contains:
+
+- `murmur-companion-phone-debug.apk` — install on the phone.
+- `murmur-companion-wear-debug.apk` — install on the watch.
+- Full documentation and `SHA256SUMS`.
+
+You can also download the APKs individually from the same release. Keep the pair together because both apps must share the same signing certificate. **Skip the optional source build below** and continue with section 3.
+
+To check downloaded files on Linux/macOS, run `sha256sum -c SHA256SUMS` (or `shasum -a 256 -c SHA256SUMS` on macOS) in the folder containing the matching files and checksum list. The release checksum list covers individual assets; the ZIP's internal list covers its two APKs.
+
+### Optional: build from source
 
 Open this repository in Android Studio and let Gradle sync finish. Set **Gradle JDK to 17** in Android Studio's Gradle settings. Set the Android SDK path through Android Studio or create a local, untracked `local.properties` file:
 
@@ -33,22 +45,22 @@ On Windows, use `gradlew.bat` instead of `./gradlew`. The first build needs inte
 | Phone | `phone/build/outputs/apk/debug/phone-debug.apk` |
 | Watch | `wear/build/outputs/apk/debug/wear-debug.apk` |
 
-Both apps must have the same application ID (`dev.murmur.companion`) **and signing certificate**. Building them together on one computer uses the same Android debug key. Download both APKs from the same CI run if using GitHub Actions artifacts; debug keys from different machines/runs can differ.
+Both apps must have the same application ID (`dev.murmur.companion`) **and signing certificate**. Building them together on one computer uses the same Android debug key. Download both APKs from the same GitHub Release (or the same CI run if using Actions artifacts); debug keys from different machines/runs can differ.
 
 Debug builds are suitable for testing. For a stable personal installation across computers or CI runs, use a persistent release signing key as described in [releasing](RELEASING.md).
 
 ## 3. Install on your phone
 
-**Using the file manager:** transfer `phone-debug.apk` to the phone, tap it, and allow that file manager to install unknown apps when Android asks. Install the APK. You can turn that permission off afterward.
+**Using the file manager:** transfer `murmur-companion-phone-debug.apk` to the phone, tap it, and allow that file manager to install unknown apps when Android asks. Install the APK. You can turn that permission off afterward.
 
 **Using ADB:** enable Developer options on the phone by tapping Build number seven times in Android Settings → About phone. Turn on USB debugging, connect the phone over USB and accept the computer's debugging prompt. In a terminal with Android Platform Tools on PATH:
 
 ```bash
 adb devices -l
-adb -s PHONE_SERIAL install -r phone/build/outputs/apk/debug/phone-debug.apk
+adb -s PHONE_SERIAL install -r murmur-companion-phone-debug.apk
 ```
 
-Replace `PHONE_SERIAL` with the serial shown by `adb devices -l`; do not type the placeholder literally.
+Run commands from the folder containing your downloaded APKs. Replace `PHONE_SERIAL` with the serial shown by `adb devices -l`; do not type the placeholder literally. If you built from source, substitute the corresponding build output path from section 2.
 
 ## 4. Connect Murmur
 
@@ -82,7 +94,7 @@ Menu wording varies by Wear OS version. Use the watch's Settings search if an it
    ```bash
    adb connect WATCH_IP:CONNECTION_PORT
    adb devices -l
-   adb -s WATCH_IP:CONNECTION_PORT install -r wear/build/outputs/apk/debug/wear-debug.apk
+   adb -s WATCH_IP:CONNECTION_PORT install -r murmur-companion-wear-debug.apk
    ```
 
 6. Open **Murmur Companion** in the watch's app launcher. Keep the phone unlocked with Murmur signed in during the first check. Agents should load from your configured Hermes connections.

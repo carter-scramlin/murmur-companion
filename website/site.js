@@ -21,7 +21,10 @@ tabs.forEach((tab, index) => {
 });
 function guideFromHash() {
   const name = location.hash.replace('#guide-', '');
-  if (tabs.some(tab => tab.dataset.guide === name)) selectGuide(name);
+  if (tabs.some(tab => tab.dataset.guide === name)) {
+    selectGuide(name);
+    requestAnimationFrame(() => document.getElementById('install').scrollIntoView({block:'start'}));
+  }
 }
 guideFromHash();
 window.addEventListener('hashchange', guideFromHash);

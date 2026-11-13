@@ -1,0 +1,6 @@
+Murmur Beta 0.3.0-beta.2
+Application ID: dev.murmur.companion.beta
+Certificate SHA-256: b883eab04c33d6aec2dda393a79330471dfacc330795c2ae8e88e8bf65a3e46b
+
+All four APKs share this persistent private beta key. The key is not a release asset.
+Install and debug variants replace one another. Install the phone file on the phone and the wear file on the watch.
